@@ -10,6 +10,7 @@ Raw session exports are in [ai-sessions/](ai-sessions/).
 - **Claude (chat, claude.ai)** as a mentor/reviewer: I used a separate chat to review
   the spec and every milestone plan before approving it, and to challenge decisions.
   Its suggestions reached Claude Code as my prompts, so they are visible in the session exports.
+  <!-- shared conversation link -->
 - **Models:** Opus for the spec/design phase, Sonnet for implementation. <!-- verify -->
 - **Plan:** Claude Pro, so the process is deliberately token-efficient
   (plan first, `/clear` between milestones, short CLAUDE.md).
@@ -61,11 +62,14 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 2. **Spec first.** Opus in plan mode asked 26 clarifying questions in one batch; I answered
    them (changing 4 recommendations), then reviewed the resulting docs/SPEC.md and requested
    9 changes before any code existed.
-3. **Milestones.** Nine ordered milestones from SPEC §9, each ending with passing checks,
-   a session export and a commit. The spec is a living document: every justified deviation
-   was written back into it in the same change.
+3. **Milestones.** Nine ordered milestones from SPEC §9 (the web app split into 7a/7b),
+   each ending with passing checks, a session export and a commit. The spec is a living
+   document: every justified deviation was written back into it in the same change.
 4. **Verification beyond tests.** A live Weatherstack call after the API milestone,
-   a clean-clone Docker run, and Playwright walkthroughs of the UI.
+   a clean-clone Docker run, Playwright walkthroughs of the UI, and every README command
+   executed before it was documented.
+5. **Final review** by two independent reviewers (spec-reviewer and pr-review-toolkit)
+   before delivery.
 
 ## Decision log
 
@@ -84,8 +88,9 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 - **Port/adapter for weather, repository interface for data.** Business logic is
   tested with fakes; a shared contract suite runs against both the in-memory and
   Prisma repositories to keep the fake honest.
-- **Test DB prepared with `migrate deploy` + TRUNCATE** instead of `migrate reset`
-  (see "Where tools caught problems"). A guard refuses any database not named `*_test`.
+- **Test DBs prepared with `migrate deploy` + TRUNCATE** instead of `migrate reset`
+  (see "Where tools caught problems"). Guards refuse any database not named `*_test`
+  (integration) or `*_e2e` (end-to-end), and neither ever reads `DATABASE_URL`.
 - **tsx at runtime in Docker.** Conscious trade-off: the image needs the Prisma CLI
   for migrations anyway. Next step: esbuild + separate migration step.
 - **Generated GraphQL types committed**, Prisma client not: small, readable types
@@ -93,6 +98,8 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 - **Native `<dialog>` instead of a custom focus trap.** Less custom code; the browser
   handles inertness, Escape and focus return. Trade-off: in Chrome, Tab can reach the
   browser UI (never the page behind).
+- **One E2E smoke flow, isolated.** Playwright starts its own api and web on dedicated
+  ports and never reuses running servers, so a dev setup and its data are never touched.
 
 ## Session log
 
@@ -107,7 +114,7 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 | 07a | [web functionality](ai-sessions/07a-web-functionality.md) | pages, data, tests | Apollo cache issues found in browser |
 | 07b | [web design](ai-sessions/07b-web-design.md) | design, a11y, responsive | Playwright walkthrough at 1280/375px |
 | 08 | [e2e](ai-sessions/08-e2e.md) | Playwright smoke flow | own ports + `_e2e` DB; 3/3 with `--repeat-each` |
-| 09 | [README & docs](ai-sessions/09-readme-docs.md) | README, final spec pass | example responses from a real run; spec dev command fixed |
+| 09 | [README & docs](ai-sessions/09-readme-docs.md) | README, final spec pass | every command run first; found a broken one |
 
 ## Where the AI was wrong (and how it was caught)
 
@@ -132,12 +139,16 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 7. **Over-broad `pkill`** (M7b). While stopping its own dev servers the agent killed one
    of my processes. It asked for permission and I approved too quickly. Fixed in the harness:
    `pkill`/`killall` are now denied, and I read out-of-list approvals carefully.
-8. **Wrong role in the E2E test** (M8). The test looked for a `dialog`, but `ConfirmDialog`
-   sets `alertdialog`. The failing run caught it; the test was fixed, the app was correct.
-9. **An unexplained hang on the first E2E run** (M8). The very first run hung before the web
-   server started. It could not be reproduced, so the cause is unknown (possibly the Chromium
-   download chained before it). Recorded as unresolved rather than explained away.
-<!-- add M9 and final review findings -->
+8. **Wrong role in the E2E test** (M8). The test looked for a `dialog`, but the
+   confirmation correctly uses `alertdialog`. The failing run caught it; the test was
+   fixed and the app didn't change.
+9. **An unexplained hang on the first E2E run** (M8). The run stopped before the web
+   server started and couldn't be reproduced (possibly the Chromium download chained
+   before it). Recorded as unresolved rather than explained away.
+10. **A spec command that never worked** (M9). `pnpm --filter api prisma migrate dev`
+    had been in the spec since the start; pnpm treats `prisma` as a script name and fails.
+    Caught only because the agent ran every README command before documenting it.
+    Fixed to `pnpm --filter api exec prisma migrate dev`.
 
 ## Where AI and tools caught problems
 
@@ -152,19 +163,23 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 - **Browser runs found Apollo cache bugs tests missed:** WeatherData (no id) was overwritten
   by the list's smaller selection (`merge: true`), and the details page refetched a deleted
   entity (`broadcast: false`).
-- **Leftover processes** (M8). Starting the E2E servers through `pnpm exec` left them running
-  after Playwright finished. `reuseExistingServer: false` refused the orphaned api on the next
-  run instead of silently reusing it. Fixed by starting the binaries directly and stopping them
-  with `SIGTERM`.
+- **Leftover processes** (M8). Starting E2E servers through `pnpm exec` left them running
+  after teardown; `reuseExistingServer: false` made the next run fail loudly instead of
+  silently reusing them. Fixed by starting the binaries directly and stopping them with SIGTERM.
 - **Deliberate breakage to prove tests work:** in several milestones the agent removed a
   check (e.g. the US country check, refetchQueries) and confirmed the matching test failed.
 - **Real API quirks, confirmed on live data:** `lat`/`lon` are strings, errors come as
   HTTP 200 with `success: false`, descriptions have trailing spaces (`"Clear "`),
   `observation_time` is UTC, and country is `"USA"`.
 
+## Final review
+
+<!-- spec-reviewer + pr-review-toolkit findings: what I fixed, what I consciously declined and why -->
+
 ## Lessons
 
 - The cheapest place to fix something is the plan. Every milestone started with one.
-- Deterministic guardrails (hooks, deny rules, DB guard) beat instructions the model may forget.
+- Deterministic guardrails (hooks, deny rules, DB guards) beat instructions the model may forget.
 - A spec written by AI still needs a critical human review; so do review suggestions.
-- Verify against reality: a live API call and a browser run each found what unit tests couldn't.
+- Verify against reality: a live API call, a browser run and executing the README each
+  found what unit tests couldn't.
