@@ -16,7 +16,7 @@ export interface RepositoryHarness {
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-interface AddressOverrides {
+export interface AddressOverrides {
   street?: string;
   city?: string;
   state?: USState;

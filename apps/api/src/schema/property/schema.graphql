@@ -1,0 +1,145 @@
+"""
+Two-letter USPS abbreviations: the 50 states and the District of Columbia.
+"""
+enum USState {
+  AL
+  AK
+  AZ
+  AR
+  CA
+  CO
+  CT
+  DE
+  DC
+  FL
+  GA
+  HI
+  ID
+  IL
+  IN
+  IA
+  KS
+  KY
+  LA
+  ME
+  MD
+  MA
+  MI
+  MN
+  MS
+  MO
+  MT
+  NE
+  NV
+  NH
+  NJ
+  NM
+  NY
+  NC
+  ND
+  OH
+  OK
+  OR
+  PA
+  RI
+  SC
+  SD
+  TN
+  TX
+  UT
+  VT
+  VA
+  WA
+  WV
+  WI
+  WY
+}
+
+type Property {
+  id: ID!
+  "Street name and number, e.g. '15528 E Golden Eagle Blvd'."
+  street: String!
+  city: String!
+  state: USState!
+  "Exactly 5 digits. A string, so leading zeros are preserved."
+  zipCode: String!
+  "Latitude of the location Weatherstack resolved for the zip code (not the exact street address)."
+  lat: Float!
+  "Longitude of the location Weatherstack resolved for the zip code (not the exact street address)."
+  long: Float!
+  "Weather observed when the property was created. Never refreshed."
+  weatherData: WeatherData!
+  createdAt: DateTime!
+}
+
+"""
+Weatherstack `current` object, units = Fahrenheit ('f'):
+temperature/feelsLike in °F, windSpeed in mph, pressure in mb,
+precip in inches, visibility in miles.
+Only the first four fields are guaranteed; the rest are null when Weatherstack omits them.
+"""
+type WeatherData {
+  "Time of observation in UTC, as returned by Weatherstack, e.g. '12:14 PM'."
+  observationTime: String!
+  temperature: Float!
+  weatherDescriptions: [String!]!
+  weatherIcons: [String!]!
+  feelsLike: Float
+  weatherCode: Int
+  windSpeed: Float
+  windDegree: Int
+  windDir: String
+  pressure: Float
+  precip: Float
+  humidity: Int
+  cloudCover: Int
+  uvIndex: Float
+  visibility: Float
+  isDay: Boolean
+}
+
+input PropertyFilter {
+  "Case-insensitive exact match."
+  city: String
+  "Exactly 5 digits."
+  zipCode: String
+  state: USState
+}
+
+type PropertyPage {
+  items: [Property!]!
+  "Total number of properties matching the filter, ignoring limit/offset."
+  totalCount: Int!
+}
+
+input CreatePropertyInput {
+  street: String!
+  city: String!
+  state: USState!
+  zipCode: String!
+}
+
+extend type Query {
+  properties(
+    filter: PropertyFilter
+    sortOrder: SortOrder = DESC
+    "1..100"
+    limit: Int = 20
+    ">= 0"
+    offset: Int = 0
+  ): PropertyPage!
+
+  "Returns null if no property has this id."
+  property(id: ID!): Property
+}
+
+extend type Mutation {
+  """
+  Creates a property. Calls Weatherstack once to fetch current weather and coordinates.
+  Fails without persisting anything if the weather lookup fails.
+  """
+  createProperty(input: CreatePropertyInput!): Property!
+
+  "Hard-deletes a property. Returns its id. Fails with NOT_FOUND if it does not exist."
+  deleteProperty(id: ID!): ID!
+}

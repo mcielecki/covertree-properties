@@ -1,0 +1,191 @@
+input CreatePropertyInput {
+  city: String!
+  state: USState!
+  street: String!
+  zipCode: String!
+}
+
+"""
+ISO-8601 date-time string on the wire.
+"""
+scalar DateTime
+
+type Mutation {
+  """
+  Creates a property. Calls Weatherstack once to fetch current weather and coordinates.
+  Fails without persisting anything if the weather lookup fails.
+  """
+  createProperty(input: CreatePropertyInput!): Property!
+
+  """
+  Hard-deletes a property. Returns its id. Fails with NOT_FOUND if it does not exist.
+  """
+  deleteProperty(id: ID!): ID!
+}
+
+type Property {
+  city: String!
+  createdAt: DateTime!
+  id: ID!
+
+  """
+  Latitude of the location Weatherstack resolved for the zip code (not the exact street address).
+  """
+  lat: Float!
+
+  """
+  Longitude of the location Weatherstack resolved for the zip code (not the exact street address).
+  """
+  long: Float!
+  state: USState!
+
+  """
+  Street name and number, e.g. '15528 E Golden Eagle Blvd'.
+  """
+  street: String!
+
+  """
+  Weather observed when the property was created. Never refreshed.
+  """
+  weatherData: WeatherData!
+
+  """
+  Exactly 5 digits. A string, so leading zeros are preserved.
+  """
+  zipCode: String!
+}
+
+input PropertyFilter {
+  """
+  Case-insensitive exact match.
+  """
+  city: String
+  state: USState
+
+  """
+  Exactly 5 digits.
+  """
+  zipCode: String
+}
+
+type PropertyPage {
+  items: [Property!]!
+
+  """
+  Total number of properties matching the filter, ignoring limit/offset.
+  """
+  totalCount: Int!
+}
+
+type Query {
+  properties(
+    filter: PropertyFilter
+
+    """
+    1..100
+    """
+    limit: Int = 20
+
+    """
+    >= 0
+    """
+    offset: Int = 0
+    sortOrder: SortOrder = DESC
+  ): PropertyPage!
+
+  """
+  Returns null if no property has this id.
+  """
+  property(id: ID!): Property
+}
+
+enum SortOrder {
+  ASC
+  DESC
+}
+
+"""
+Two-letter USPS abbreviations: the 50 states and the District of Columbia.
+"""
+enum USState {
+  AK
+  AL
+  AR
+  AZ
+  CA
+  CO
+  CT
+  DC
+  DE
+  FL
+  GA
+  HI
+  IA
+  ID
+  IL
+  IN
+  KS
+  KY
+  LA
+  MA
+  MD
+  ME
+  MI
+  MN
+  MO
+  MS
+  MT
+  NC
+  ND
+  NE
+  NH
+  NJ
+  NM
+  NV
+  NY
+  OH
+  OK
+  OR
+  PA
+  RI
+  SC
+  SD
+  TN
+  TX
+  UT
+  VA
+  VT
+  WA
+  WI
+  WV
+  WY
+}
+
+"""
+Weatherstack `current` object, units = Fahrenheit ('f'):
+temperature/feelsLike in °F, windSpeed in mph, pressure in mb,
+precip in inches, visibility in miles.
+Only the first four fields are guaranteed; the rest are null when Weatherstack omits them.
+"""
+type WeatherData {
+  cloudCover: Int
+  feelsLike: Float
+  humidity: Int
+  isDay: Boolean
+
+  """
+  Time of observation in UTC, as returned by Weatherstack, e.g. '12:14 PM'.
+  """
+  observationTime: String!
+  precip: Float
+  pressure: Float
+  temperature: Float!
+  uvIndex: Float
+  visibility: Float
+  weatherCode: Int
+  weatherDescriptions: [String!]!
+  weatherIcons: [String!]!
+  windDegree: Int
+  windDir: String
+  windSpeed: Float
+}

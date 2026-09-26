@@ -4,6 +4,7 @@ dist
 coverage
 **/generated/**
 **/*.generated.ts
+**/*.generated.graphqls
 docs/ai-sessions
 # Hand-written prose and harness config: keep author formatting (tables, line breaks).
 docs/

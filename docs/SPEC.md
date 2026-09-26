@@ -82,7 +82,9 @@ unless stated otherwise. In API tests the weather provider is a fake unless stat
 - **AC-3.6** G `filter: { city: "Phoenix", state: AZ }`, T only properties matching **both** are returned.
 - **AC-3.7** G `filter: { zipCode: "852" }` or a city that fails the city rules (§2.3),
   T a `BAD_USER_INPUT` error is returned.
-- **AC-3.8** G `filter: { state: XX }`, T GraphQL validation fails (`GRAPHQL_VALIDATION_FAILED`).
+- **AC-3.8** G `filter: { state: XX }`, T GraphQL validation fails: as an inline literal with
+  `GRAPHQL_VALIDATION_FAILED`, as a variable with an HTTP 400 request error that has no
+  `extensions.code` (§5).
 - **AC-3.9** G a filter field is omitted or `null`, T that field does not constrain the result.
 
 ### US-4 — Property details
@@ -105,7 +107,9 @@ unless stated otherwise. In API tests the weather provider is a fake unless stat
   T `BAD_USER_INPUT`, nothing persisted, Weatherstack not called.
 - **AC-5.4** G `street` or `city` is empty or whitespace-only, or longer than its limit,
   T `BAD_USER_INPUT`, nothing persisted, Weatherstack not called.
-- **AC-5.5** G `state` is not a `USState` value, T `GRAPHQL_VALIDATION_FAILED`, Weatherstack not called.
+- **AC-5.5** G `state` is not a `USState` value, T the request is rejected before execution
+  (`GRAPHQL_VALIDATION_FAILED` for a literal, HTTP 400 without a code for a variable; §5),
+  nothing persisted, Weatherstack not called.
 - **AC-5.6** G input `{ street: "  15528  E Golden Eagle Blvd ", city: " Fountain  Hills" … }`,
   T the stored values are `"15528 E Golden Eagle Blvd"` and `"Fountain Hills"`.
 - **AC-5.7** G a property with the same normalized address exists (case-insensitive on street and city),
@@ -567,7 +571,8 @@ Resolvers do not catch errors.
 
 | `extensions.code` | Raised when | Message (client-facing) | Extra extensions |
 |---|---|---|---|
-| `GRAPHQL_VALIDATION_FAILED` | Invalid document or variables, e.g. an unknown `USState` value (Yoga/graphql-js, HTTP 400) | graphql-js message | — |
+| `GRAPHQL_VALIDATION_FAILED` | Invalid document, e.g. an unknown `USState` literal or an unknown input field (Yoga/graphql-js) | graphql-js message | — |
+| *(none)* | Invalid variable value, e.g. `$state: "XX"`. graphql-js reports variable coercion failures without a code, and Yoga answers HTTP 400 | graphql-js message | — |
 | `BAD_USER_INPUT` | zod validation fails (input, filter, id, limit/offset) | `"Invalid input"` | `fieldErrors: { [path]: string[] }` |
 | `NOT_FOUND` | `deleteProperty` on an unknown id | `"Property not found"` | `id` |
 | `ALREADY_EXISTS` | Same normalized address already stored | `"A property with this address already exists"` | `id` of the existing property, when known |
@@ -579,12 +584,18 @@ Resolvers do not catch errors.
   `state`, `zipCode` for `createProperty` input and for `PropertyFilter`, `limit` / `offset`, and
   `id`. Each field carries exactly one message (the first failing rule).
 - HTTP status: Yoga's defaults apply. Execution errors return 200 with `errors[]` (as in the
-  GraphQL-over-HTTP spec), and parse/validation errors return 400. Domain errors do not set
-  `extensions.http`.
+  GraphQL-over-HTTP spec). Parse/validation errors and invalid variables return 400 when the client
+  accepts `application/graphql-response+json`, as Apollo Client does. For a plain
+  `application/json` request, Yoga returns document validation errors with 200. Domain errors do
+  not set `extensions.http`. The web client never sends an invalid enum (the state `<select>` is
+  generated from `USState`), so the missing code on variable errors does not reach the UI.
 - A mutation that fails returns `data: null`, because `createProperty` and `deleteProperty` are
   non-null fields.
 - The web client switches on `extensions.code` only, never on message text.
-- Unexpected errors are logged with the operation name. PII is limited to the address, which is not sensitive here.
+- Unexpected errors are logged with the operation name, by a small Yoga plugin in `app.ts`
+  (`onExecuteDone`, before masking). Domain errors and request errors (a `GraphQLError` as the
+  cause) are not logged as unexpected. PII is limited to the address, which is not sensitive here.
+- `originalError` is added to masked errors only when `NODE_ENV=development` is set explicitly.
 
 ---
 
@@ -615,12 +626,12 @@ covertree-properties/
 ├── apps/
 │   ├── api/
 │   │   ├── Dockerfile
-│   │   ├── codegen.ts            # server preset (@eddeee888/gcg-typescript-resolver-files)
+│   │   ├── codegen.ts            # server preset (@eddeee888/gcg-typescript-resolver-files); `pnpm codegen`
 │   │   ├── prisma.config.ts
 │   │   ├── prisma/{schema.prisma, migrations/}
 │   │   ├── vitest.config.ts      # projects: unit, integration
 │   │   └── src/
-│   │       ├── main.ts           # reads env, builds deps, starts node:http server
+│   │       ├── main.ts           # loads repo-root .env, parses env, builds deps, starts node:http server
 │   │       ├── app.ts            # createApp(deps) → yoga instance (used by main and tests)
 │   │       ├── config/env.ts     # zod-parsed process.env
 │   │       ├── context.ts        # GraphQLContext { propertyService }
@@ -633,11 +644,12 @@ covertree-properties/
 │   │       │   │   └── resolvers/
 │   │       │   │       ├── Query/{properties.ts, property.ts}
 │   │       │   │       ├── Mutation/{createProperty.ts, deleteProperty.ts}
-│   │       │   │       ├── Property.ts
+│   │       │   │       ├── Property.ts, PropertyPage.ts  # empty: default resolvers suffice
 │   │       │   │       └── WeatherData.ts       # snake_case → camelCase, is_day → boolean
-│   │       │   ├── resolvers.generated.ts       # generated
-│   │       │   ├── typeDefs.generated.ts        # generated
-│   │       │   └── types.generated.ts           # generated
+│   │       │   ├── resolvers.generated.ts       # generated, committed
+│   │       │   ├── typeDefs.generated.ts        # generated, committed
+│   │       │   ├── types.generated.ts           # generated, committed
+│   │       │   └── schema.generated.graphqls    # generated, committed (merged SDL)
 │   │       ├── property/
 │   │       │   ├── property.service.ts          # business logic; depends on the two interfaces below
 │   │       │   ├── property.repository.ts       # PropertyRepository interface
@@ -691,9 +703,20 @@ Layering rules (from CLAUDE.md), made concrete:
 - **The repository** (`prisma-property.repository.ts`) is the only file that imports the Prisma
   client. It filters the city with equality on `cityKey`. It turns P2002 into `AlreadyExistsError`,
   and P2025 on delete into `NotFoundError`.
-- **`app.ts`** wires everything through `createApp({ propertyService })`. `main.ts` builds the real
-  dependencies and tests build them with fakes. No DI container is used, because constructor
-  injection is enough.
+- **`app.ts`** wires everything through `createApp({ propertyService, logger, corsOrigin, isDev })`.
+  `main.ts` builds the real dependencies and tests build them with fakes. No DI container is used,
+  because constructor injection is enough.
+
+**Generated GraphQL code is committed.** Unlike the Prisma client (gitignored, generated on
+`postinstall`), the server preset's `*.generated.*` files are committed. `typeDefs.generated.ts`
+is imported at runtime, and the preset writes resolver stubs into `src`, so a clean clone
+typechecks without running codegen. Run `pnpm codegen` after editing any `schema.graphql`.
+
+**`graphql` is pinned to v16.** v17 publishes a `development` export condition. Vitest resolves it
+for our source, while Node loads the non-development build for graphql-yoga, so two `GraphQLError`
+classes exist and `instanceof` checks (error masking) fail. v16 has the same kind of split (ESM
+`module` vs CJS `main`), so `apps/api/vitest.config.ts` aliases `graphql` to `graphql/index.js`,
+the file Node picks at runtime.
 
 **Web typed operations.** The Codegen docs now recommend the client preset over the older
 `typescript-react-apollo` hooks plugin. Operations are written with the generated `graphql()`
@@ -722,6 +745,7 @@ custom `typePolicies` or manual list merging.
 | `WEATHER_PROVIDER` | api | `weatherstack` | `fake` for E2E and demo without a key; logs a startup warning |
 | `PORT` | api | `4000` | |
 | `CORS_ORIGIN` | api | `http://localhost:5173` | |
+| `NODE_ENV` | api | `production` | only `development` adds `originalError` to masked errors; `pnpm dev` sets it |
 | `VITE_GRAPHQL_URL` | web | `http://localhost:4000/graphql` | build-time |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | compose (db) | `covertree` / `covertree` / `covertree` | dev database; init script adds `covertree_test`, `covertree_e2e` |
 
@@ -731,7 +755,8 @@ custom `typePolicies` or manual list merging.
   `db` has a healthcheck (`pg_isready -U $POSTGRES_USER -d $POSTGRES_DB`), and `api` declares
   `depends_on: { db: { condition: service_healthy } }`, so migrations never race Postgres startup.
 - **Dev:** `docker compose up -d db`, then `pnpm install`, `pnpm --filter api prisma migrate dev`, `pnpm dev`
-  (api with `tsx watch`, web with Vite).
+  (api with `tsx watch`, web with Vite). The api reads the repo-root `.env`; variables already set in
+  the environment take precedence.
 
 ---
 

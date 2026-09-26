@@ -1,0 +1,10 @@
+"ISO-8601 date-time string on the wire."
+scalar DateTime
+
+enum SortOrder {
+  ASC
+  DESC
+}
+
+type Query
+type Mutation

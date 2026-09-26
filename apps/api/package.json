@@ -5,21 +5,28 @@
   "type": "module",
   "scripts": {
     "postinstall": "prisma generate",
-    "codegen": "prisma generate",
+    "codegen": "prisma generate && graphql-codegen",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
-    "test:integration": "vitest run --project integration"
+    "test:integration": "vitest run --project integration",
+    "dev": "NODE_ENV=development tsx watch src/main.ts"
   },
   "dependencies": {
     "@covertree/validation": "workspace:*",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "dotenv": "^18.0.3",
+    "graphql": "^16.14.2",
+    "graphql-scalars": "^2.0.0",
+    "graphql-yoga": "^5.24.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "prisma": "7.10.0"
+    "@eddeee888/gcg-typescript-resolver-files": "^0.19.0",
+    "@graphql-codegen/cli": "^7.4.3",
+    "prisma": "7.10.0",
+    "tsx": "^4.23.15"
   }
 }
