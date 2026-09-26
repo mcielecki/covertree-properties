@@ -684,16 +684,18 @@ covertree-properties/
 │       ├── playwright.config.ts  # webServer: api (WEATHER_PROVIDER=fake, covertree_e2e DB) + web
 │       ├── e2e/property-smoke.spec.ts
 │       └── src/
-│           ├── main.tsx, App.tsx, router.tsx
-│           ├── apollo/client.ts               # ApolloClient + default InMemoryCache (no custom typePolicies)
-│           ├── gql/                            # generated TypedDocumentNodes
+│           ├── main.tsx, App.tsx (layout), router.tsx (routes shared with tests)
+│           ├── apollo/client.ts               # ApolloClient + InMemoryCache (only WeatherData merge policy, §6)
+│           ├── gql/                            # generated TypedDocumentNodes, committed (`pnpm codegen`)
 │           ├── lib/error-messages.ts           # extensions.code → user-facing text
+│           ├── lib/format.ts                   # °F / mph / %, trimmed descriptions, "Observed … UTC", dates
+│           ├── components/Feedback.tsx         # LoadingState, ErrorAlert (ALREADY_EXISTS link)
 │           ├── features/properties/
 │           │   ├── api/{queries.ts, mutations.ts}      # graphql() documents
 │           │   ├── pages/{PropertyListPage, PropertyDetailsPage, CreatePropertyPage}.tsx
 │           │   ├── components/{PropertyFilters, PropertyTable, Pagination, WeatherCard, DeleteButton, PropertyForm}.tsx
 │           │   └── hooks/usePropertyListParams.ts      # URL ⇄ filter/sort/page
-│           └── test/setup.ts
+│           └── test/{setup.ts, render.tsx, fixtures.ts}  # renderApp: real routes + MockLink
 ```
 
 Layering rules (from CLAUDE.md), made concrete:
@@ -725,16 +727,30 @@ the file Node picks at runtime.
 `typescript-react-apollo` hooks plugin. Operations are written with the generated `graphql()`
 function and passed to Apollo's own `useQuery` / `useMutation`. The result is fully typed "generated
 typed hooks" without a second code generator. Apollo Client 4 exposes the React hooks from
-`@apollo/client/react`; check with context7 at implementation time.
+`@apollo/client/react` (verified at step 7: Apollo Client 4.3, React Router 8.4 data router,
+client preset 6.2 with `enumType: 'string-literal'` so `USState` matches `@covertree/validation`).
+The generated `src/gql/` is committed like the api's generated files, so the web Docker build and
+a clean clone typecheck without the api schema step. URL values that fail the shared schemas are
+dropped before they reach the API, so a hand-edited query string never produces `BAD_USER_INPUT`.
 
 **Web cache strategy.** The cache is kept simple on purpose: the default `InMemoryCache` with no
-custom `typePolicies` or manual list merging.
-- `createProperty` and `deleteProperty` pass `refetchQueries: [PropertiesDocument]`, which refetches
-  the active list query with its current variables (filters, sort order, page), and set
-  `awaitRefetchQueries: true`.
+manual list merging and a single type policy.
+- `WeatherData: { merge: true }`. `WeatherData` has no id, so without it the list query's
+  `weatherData { temperature }` replaces the details query's full object (Apollo warns "Cache data
+  may be lost") and the details page refetches on its next visit. Merging is safe because weather
+  data never changes after creation (AC-4.5).
+- `createProperty` and `deleteProperty` pass `refetchQueries: [PROPERTIES_QUERY]` (the `Properties`
+  document), which refetches the active list query with its current variables (filters, sort
+  order, page), and set `awaitRefetchQueries: true`.
+- `refetchQueries` only reaches **active** queries. After a create (the form navigates to the new
+  property) or a delete on the details page, the list query is not mounted, so the list query uses
+  `fetchPolicy: 'cache-and-network'` and revalidates on every visit. In development Apollo logs
+  "Unknown query named Properties requested in refetchQueries" in that case; it is expected.
 - On the details page, a successful delete calls
-  `cache.evict({ id: cache.identify({ __typename: 'Property', id }) })` and then `cache.gc()`, and
-  navigates to `/`.
+  `cache.evict({ id: cache.identify({ __typename: 'Property', id }), broadcast: false })` and then
+  `cache.gc()`, and navigates to `/`. `broadcast: false` matters: the details query is still mounted
+  at that moment, and a broadcast would make it refetch the deleted property and write it back.
+  Dangling references in the cached list are filtered out by Apollo's default list read.
 
 **Env vars**
 
@@ -770,7 +786,7 @@ custom `typePolicies` or manual list merging.
   - **`web`:** served by nginx on `5173:80`, so the default `CORS_ORIGIN` works unchanged. It
     depends on `api: service_healthy`. `VITE_GRAPHQL_URL` is a build arg, because Vite inlines it.
   - **Contract with the web app:** `pnpm --filter @covertree/web build` writes static files to
-    `apps/web/dist`. Until step 7 that is a placeholder `index.html`.
+    `apps/web/dist` (the React app since step 7).
   - **Missing key:** with no `WEATHERSTACK_API_KEY` and `WEATHER_PROVIDER` not `fake`, the api
     exits at startup with `WEATHERSTACK_API_KEY: required unless WEATHER_PROVIDER=fake`, and
     compose reports that `web`'s dependency failed. `WEATHER_PROVIDER=fake docker compose up --build`

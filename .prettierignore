@@ -5,6 +5,7 @@ coverage
 **/generated/**
 **/*.generated.ts
 **/*.generated.graphqls
+apps/web/src/gql/
 docs/ai-sessions
 # Hand-written prose and harness config: keep author formatting (tables, line breaks).
 docs/
