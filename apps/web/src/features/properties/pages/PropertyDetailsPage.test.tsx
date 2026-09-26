@@ -1,8 +1,9 @@
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_LIST_VARIABLES,
+  listItem,
   PROPERTY_ID,
   propertyDetails,
   propertyPage,
@@ -32,6 +33,7 @@ describe('PropertyDetailsPage', () => {
       expect(within(details).getByText(text)).toBeInTheDocument();
     }
     expect(within(details).getByText(/^Sep 26, 2026, 12:14\sPM$/)).toBeInTheDocument();
+    expect(within(details).getByText(PROPERTY_ID)).toBeInTheDocument();
 
     const weather = screen.getByRole('region', { name: 'Weather at creation' });
     expect(within(weather).getByText('95°F')).toBeInTheDocument();
@@ -102,5 +104,41 @@ describe('PropertyDetailsPage', () => {
     // The eviction must not make the (still mounted) details query fetch the deleted property.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(detailsResult).toHaveBeenCalledOnce();
+  });
+
+  it('AC-W.6: a property deleted from the list is not served from the cache afterwards', async () => {
+    const user = userEvent.setup();
+    const { router } = await renderApp(`/properties/${PROPERTY_ID}`, [
+      detailsMock({ data: { property: propertyDetails() } }),
+      {
+        request: { query: PROPERTIES_QUERY, variables: DEFAULT_LIST_VARIABLES },
+        result: propertyPage([listItem()]),
+      },
+      {
+        request: { query: DELETE_PROPERTY, variables: { id: PROPERTY_ID } },
+        result: { data: { deleteProperty: PROPERTY_ID } },
+      },
+      {
+        request: { query: PROPERTIES_QUERY, variables: DEFAULT_LIST_VARIABLES },
+        result: propertyPage([]),
+      },
+      // Only reached if the cache no longer holds the deleted property.
+      detailsMock({ data: { property: null } }),
+    ]);
+    await screen.findByRole('heading', { name: '15528 E Golden Eagle Blvd' });
+
+    await user.click(screen.getByRole('link', { name: 'All properties' }));
+    await user.click(await screen.findByRole('button', { name: /^Delete 15528/ }));
+    await user.click(
+      within(screen.getByRole('alertdialog', { name: 'Delete this property?' })).getByRole(
+        'button',
+        { name: 'Delete property' },
+      ),
+    );
+    expect(await screen.findByText('No properties yet.')).toBeInTheDocument();
+
+    await act(() => router.navigate(`/properties/${PROPERTY_ID}`));
+
+    expect(await screen.findByRole('heading', { name: 'Property not found' })).toBeInTheDocument();
   });
 });

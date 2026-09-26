@@ -1,4 +1,4 @@
-import { skipToken, useApolloClient, useQuery } from '@apollo/client/react';
+import { skipToken, useQuery } from '@apollo/client/react';
 import { idSchema } from '@covertree/validation';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ErrorAlert, LoadingState } from '../../../components/Feedback';
@@ -11,7 +11,6 @@ import { WeatherCard } from '../components/WeatherCard';
 export function PropertyDetailsPage() {
   const { id = '' } = useParams();
   const validId = idSchema.safeParse(id).success;
-  const client = useApolloClient();
   const navigate = useNavigate();
   // A malformed id can't exist; don't spend a request on a BAD_USER_INPUT error.
   const { data, loading, error, refetch } = useQuery(
@@ -19,12 +18,8 @@ export function PropertyDetailsPage() {
     validId ? { variables: { id } } : skipToken,
   );
 
+  // DeleteButton has already evicted the property from the cache.
   function handleDeleted() {
-    const { cache } = client;
-    // No broadcast: this page is still mounted, and a broadcast would make its query refetch
-    // the property that was just deleted.
-    cache.evict({ id: cache.identify({ __typename: 'Property', id }), broadcast: false });
-    cache.gc();
     void navigate('/', { replace: true });
   }
 
@@ -79,6 +74,9 @@ export function PropertyDetailsPage() {
               </div>
             ))}
           </dl>
+          <p className="mt-5 text-xs text-slate">
+            ID <span className="font-mono break-all select-all">{property.id}</span>
+          </p>
           <p className="mt-6 border-t border-mist pt-4 text-sm text-slate">
             Coordinates are those Weatherstack resolved for the zip code, not the street address.
           </p>

@@ -156,16 +156,18 @@ unless stated otherwise. In API tests the weather provider is a fake unless stat
 - **AC-W.4** `/properties/new` validates on the client with the same rules as the API. Invalid fields show inline messages
   and the request is not sent. API errors are shown in human terms per error code (§5).
   On success it navigates to `/properties/:id`.
-- **AC-W.5** `/properties/:id` shows all fields plus a weather card (icon, description, temperature °F, feels-like,
+- **AC-W.5** `/properties/:id` shows all fields (the `id` subdued, as secondary information) plus a weather card (icon, description, temperature °F, feels-like,
   wind mph + direction, humidity %, observation time labelled as UTC, e.g. "Observed 12:14 PM UTC").
   Nullable weather fields that are `null` are hidden, never shown as "null" or 0. An unknown id shows a
   "Property not found" state.
 - **AC-W.6** Delete is available on the list and details pages. It asks for confirmation in a modal
   `<dialog>` opened with `showModal()` (page inert, Escape cancels, focus returns to the trigger).
   After `createProperty` or `deleteProperty` succeeds, the active `Properties` list query is refetched
-  (`refetchQueries`), so the list is correct without a full reload. On the details page, a successful
-  delete evicts the `Property` entity from the Apollo cache (`cache.evict` + `cache.gc`) and redirects to `/`.
-- **AC-W.7** Loading and error states are shown for every query and mutation.
+  (`refetchQueries`), so the list is correct without a full reload. Every successful delete (list or
+  details page) evicts the `Property` entity from the Apollo cache (`cache.evict` + `cache.gc`), so
+  no page can serve it afterwards. On the details page it then redirects to `/`.
+- **AC-W.7** Loading and error states are shown for every query and mutation. A failed list
+  refresh shows its error with a retry even while cached data is still displayed.
 
 ---
 
@@ -454,7 +456,8 @@ whose output drifts from the domain type fails `tsc`.
 Implementations:
 - `WeatherstackProvider`, the real adapter.
 - `FakeWeatherProvider`, a deterministic stand-in. It returns fixture data for any zip, can be set up
-  to throw or delay, and records its calls. It is used by the API integration tests and the E2E flow,
+  to throw, delay, or hold calls at a barrier until N of them arrived (the deterministic AC-5.12
+  race test), and records its calls. It is used by the API integration tests and the E2E flow,
   and can be selected at runtime with `WEATHER_PROVIDER=fake`. When that happens, `main.ts` logs a
   prominent `warn` line at startup, e.g.
   `WEATHER_PROVIDER=fake: weather data and coordinates are FAKE, Weatherstack will not be called`.
@@ -474,7 +477,10 @@ GET {WEATHERSTACK_BASE_URL}/current?access_key={WEATHERSTACK_API_KEY}&query={zip
 - The request uses global `fetch` with `signal: AbortSignal.timeout(WEATHERSTACK_TIMEOUT_MS)`
   (default 5000) and makes no retries.
 - **The key is kept secret.** The full URL is never logged. Log lines contain only `zipCode`, the
-  duration, the HTTP status and the Weatherstack error code/type.
+  duration, the HTTP status, the numeric Weatherstack error code, and the error `type` only if it
+  matches `^[a-z_]+$` (otherwise `"unknown"`). Provider free text is never logged or put into
+  error messages: `error.info` is ignored, and a non-US `location.country` is logged only if it
+  matches `^[A-Za-z .'-]{1,60}$` (otherwise `"unknown"`), because either could echo the request.
 - `query` is the zip code alone. Weatherstack treats a 5-digit value as a US ZIP. The coordinates
   returned are for the location Weatherstack resolved (roughly the ZIP's town), **not** the exact
   street address. The README and the `lat`/`long` field descriptions say so.
@@ -701,6 +707,7 @@ covertree-properties/
 │           ├── components/ConfirmDialog.tsx    # native <dialog> + showModal()
 │           ├── features/properties/
 │           │   ├── api/{queries.ts, mutations.ts}      # graphql() documents
+│           │   ├── api/cache.ts                        # evictProperty() after a delete
 │           │   ├── pages/{PropertyListPage, PropertyDetailsPage, CreatePropertyPage}.tsx
 │           │   ├── components/{PropertyFilters, PropertyTable, Pagination, WeatherCard, DeleteButton, PropertyForm}.tsx
 │           │   └── hooks/usePropertyListParams.ts      # URL ⇄ filter/sort/page
@@ -755,11 +762,15 @@ manual list merging and a single type policy.
   property) or a delete on the details page, the list query is not mounted, so the list query uses
   `fetchPolicy: 'cache-and-network'` and revalidates on every visit. In development Apollo logs
   "Unknown query named Properties requested in refetchQueries" in that case; it is expected.
-- On the details page, a successful delete calls
-  `cache.evict({ id: cache.identify({ __typename: 'Property', id }), broadcast: false })` and then
-  `cache.gc()`, and navigates to `/`. `broadcast: false` matters: the details query is still mounted
+- Every successful delete goes through `DeleteButton`, which calls `evictProperty(cache, id)`
+  (`features/properties/api/cache.ts`): `cache.evict({ id: cache.identify({ __typename: 'Property', id }), broadcast: false })`
+  and then `cache.gc()`. It runs after the awaited list refetch, on both the list and the details
+  page, so a details page visited earlier cannot serve the deleted property from the cache. The
+  details page then navigates to `/`. `broadcast: false` matters: the details query is still mounted
   at that moment, and a broadcast would make it refetch the deleted property and write it back.
   Dangling references in the cached list are filtered out by Apollo's default list read.
+- With `cache-and-network`, Apollo keeps the cached `data` when the revalidation fails, so the list
+  page shows the error alert (with retry) whenever `error` is set, not only when there is no data.
 
 **Env vars**
 

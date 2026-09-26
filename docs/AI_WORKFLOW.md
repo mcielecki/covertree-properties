@@ -174,7 +174,33 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 
 ## Final review
 
-<!-- spec-reviewer + pr-review-toolkit findings: what I fixed, what I consciously declined and why -->
+Reviewed by **GPT-6 Astra** (OpenAI), a model from a different vendor, so the code wasn't
+graded by the same model that wrote it. It had read-only access and the same instructions
+as the spec-reviewer agent. No critical findings; all 436 tests and the E2E flow passed.
+Every finding came with a reproduction. Session: [10-gpt6astra_review](ai-sessions/10-gpt6astra_review.md).
+
+**Fixed:**
+- API key redaction (AC-5.13): the provider's free-text `error.type` was logged unfiltered.
+  Now only numeric codes and allowlisted type names are logged.
+- A property deleted from the list stayed in the Apollo cache and reappeared on its
+  details page. Eviction is now shared by both delete entry points. This was a gap in my
+  own cache work from M7a.
+- Refresh errors were hidden when cached data existed; an error banner with retry now shows.
+- The details page omitted the id, though the test was named "shows every field".
+- Missing assertions on the absence of `extensions.code`, and the race test (AC-5.12)
+  made deterministic with a barrier instead of relying on timing.
+
+**Consciously declined:**
+- A background loading indicator: `cache-and-network` shows data immediately and refreshes
+  within a fraction of a second, so an indicator would only flicker.
+- Bounding the page number in the URL: only a hand-crafted URL triggers it, and the
+  result is an ordinary, already handled error.
+- Unicode lowercase expansion overflowing `cityKey` (e.g. 100 × "İ"): not a realistic
+  US city name, and the fix needs a schema migration.
+- 32-bit bounds on optional weather integers: Weatherstack returns percentages and small
+  numbers; the case is theoretical.
+- More Playwright coverage of the dialog: the spec deliberately keeps one E2E flow to avoid
+  flakiness; Escape, focus return and inertness were verified in the M7b browser walkthrough.
 
 ## Lessons
 

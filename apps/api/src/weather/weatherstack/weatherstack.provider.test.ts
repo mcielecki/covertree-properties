@@ -349,6 +349,76 @@ describe('WeatherstackProvider secrecy', () => {
     },
   );
 
+  // Weatherstack free text (error.type/info, location.country) could echo the request, key included.
+  it.each([
+    [
+      'error.type and error.info',
+      {
+        success: false,
+        error: {
+          code: 101,
+          type: `invalid_access_key ${API_KEY}`,
+          info: `The key ${API_KEY} is not valid.`,
+        },
+      },
+    ],
+    ['location.country', withLocation({ country: `Canada (access_key=${API_KEY})` })],
+  ])(
+    'AC-5.13: never logs or throws provider free text that echoes the key (%s)',
+    async (_label, body) => {
+      const { provider, logger } = setup(() => jsonResponse(body));
+
+      const error = await provider.getCurrentByZip('85268').catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect(String((error as Error).message)).not.toContain(API_KEY);
+      expect(JSON.stringify(error)).not.toContain(API_KEY);
+      const logged = JSON.stringify([
+        logger.info.mock.calls,
+        logger.warn.mock.calls,
+        logger.error.mock.calls,
+      ]);
+      expect(logged).not.toContain(API_KEY);
+      expect(logged).not.toContain('is not valid');
+    },
+  );
+
+  it('AC-5.13: logs an unexpected error.type as "unknown", next to the numeric code', async () => {
+    const body = { success: false, error: { code: 101, type: `bad type ${API_KEY}` } };
+    const { provider, logger } = setup(() => jsonResponse(body));
+
+    await provider.getCurrentByZip('85268').catch(() => undefined);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ errorCode: 101, errorType: 'unknown' }),
+    );
+  });
+
+  it('AC-5.13: logs an unexpected country as "unknown"', async () => {
+    const { provider, logger } = setup(() =>
+      jsonResponse(withLocation({ country: `Canada ${API_KEY}` })),
+    );
+
+    await provider.getCurrentByZip('85268').catch(() => undefined);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ country: 'unknown' }),
+    );
+  });
+
+  it('still logs a well-formed country name for a non-US location', async () => {
+    const { provider, logger } = setup(() => jsonResponse(nonUs));
+
+    await provider.getCurrentByZip('85268').catch(() => undefined);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ country: 'Canada' }),
+    );
+  });
+
   it('AC-5.13: the API key never appears in success logs', async () => {
     const { provider, logger } = setup();
 

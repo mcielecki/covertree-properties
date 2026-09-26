@@ -53,6 +53,38 @@ describe('PropertyListPage', () => {
     expect(within(alert).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
+  it('AC-W.7: shows a refresh error with a retry next to cached data', async () => {
+    const user = userEvent.setup();
+    await renderApp(
+      '/',
+      [
+        {
+          request: { query: PROPERTIES_QUERY, variables: DEFAULT_LIST_VARIABLES },
+          error: new TypeError('Failed to fetch'),
+        },
+        listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem({ street: '1 Fresh St' })])),
+      ],
+      {
+        // Data from an earlier visit; cache-and-network shows it, then revalidates.
+        seed: (cache) =>
+          cache.writeQuery({
+            query: PROPERTIES_QUERY,
+            variables: DEFAULT_LIST_VARIABLES,
+            ...propertyPage([listItem()]),
+          }),
+      },
+    );
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not reach the server');
+    expect(screen.getByRole('link', { name: '15528 E Golden Eagle Blvd' })).toBeInTheDocument();
+
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByRole('link', { name: '1 Fresh St' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('AC-W.7: shows an empty state when there are no properties', async () => {
     await renderApp('/', [listMock(DEFAULT_LIST_VARIABLES, propertyPage([]))]);
 

@@ -253,6 +253,7 @@ describe('US-3 filter by city, zip code and state', () => {
     expect(response.body.errors).toEqual([
       expect.objectContaining({ message: expect.stringContaining('"USState" enum') as unknown }),
     ]);
+    expect(response.body.errors?.[0]?.extensions?.code).toBeUndefined();
   });
 
   it.each([{}, { city: null, zipCode: null, state: null }, null])(

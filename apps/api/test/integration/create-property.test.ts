@@ -171,6 +171,8 @@ describe('US-5 add a property', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.data).toBeUndefined();
+    expect(response.body.errors?.length).toBeGreaterThan(0);
+    expect(response.body.errors?.every((error) => error.extensions?.code === undefined)).toBe(true);
     expect(weather.calls).toEqual([]);
     expect(await storedCount()).toBe(0);
   });
@@ -249,14 +251,15 @@ describe('US-5 add a property', () => {
   });
 
   it('AC-5.12: of two concurrent identical creates, exactly one succeeds', async () => {
-    // Both pass the pre-check while the fake "calls Weatherstack"; the unique constraint decides.
-    const slowWeather = new FakeWeatherProvider({ delayMs: 50 });
-    const { app: slowApp } = createTestApp(prisma, slowWeather);
-    const send = () => gql<CreateData>(slowApp, CREATE, { input: VALID_INPUT });
+    // The barrier releases the weather calls only once both requests reached them, so both have
+    // passed the duplicate pre-check before either writes; the unique constraint decides.
+    const barrierWeather = new FakeWeatherProvider({ barrier: 2 });
+    const { app: raceApp } = createTestApp(prisma, barrierWeather);
+    const send = () => gql<CreateData>(raceApp, CREATE, { input: VALID_INPUT });
 
     const responses = await Promise.all([send(), send()]);
 
-    expect(slowWeather.calls).toHaveLength(2);
+    expect(barrierWeather.calls).toHaveLength(2);
     const codes = responses.map((response) => errorCodes(response)[0] ?? 'OK').sort();
     expect(codes).toEqual(['ALREADY_EXISTS', 'OK']);
     const failed = responses.find((response) => response.body.errors);

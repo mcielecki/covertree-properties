@@ -13,6 +13,15 @@ export const DEFAULT_WEATHERSTACK_TIMEOUT_MS = 5000;
 
 const LOCATION_NOT_FOUND_CODE = 615;
 
+// Provider free text could echo the request URL (with the key), so only known-safe shapes are
+// logged or put into error messages (AC-5.13).
+const SAFE_ERROR_TYPE = /^[a-z_]+$/;
+const SAFE_COUNTRY = /^[A-Za-z .'-]{1,60}$/;
+
+function safeText(value: string, pattern: RegExp): string {
+  return pattern.test(value) ? value : 'unknown';
+}
+
 export interface WeatherstackProviderOptions {
   apiKey: string;
   baseUrl?: string;
@@ -80,7 +89,8 @@ export class WeatherstackProvider implements WeatherProvider {
 
     const errorBody = weatherstackErrorBodySchema.safeParse(body);
     if (errorBody.success) {
-      const { code, type } = errorBody.data.error;
+      const { code } = errorBody.data.error;
+      const type = safeText(errorBody.data.error.type, SAFE_ERROR_TYPE);
       this.logger.warn(
         'Weatherstack returned an error',
         log({ status: response.status, errorCode: code, errorType: type }),
@@ -107,7 +117,7 @@ export class WeatherstackProvider implements WeatherProvider {
     if (!US_COUNTRY_NAMES.includes(location.country)) {
       this.logger.warn(
         'Weatherstack resolved a location outside the US',
-        log({ status: response.status, country: location.country }),
+        log({ status: response.status, country: safeText(location.country, SAFE_COUNTRY) }),
       );
       throw new LocationNotFoundError(zipCode, 'resolved outside the US');
     }

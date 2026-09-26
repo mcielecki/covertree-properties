@@ -53,9 +53,10 @@ export function PropertyListPage() {
         onApply={setFilters}
       />
 
-      {error && !data ? (
-        <ErrorAlert error={describeError(error)} onRetry={() => void refetch()} />
-      ) : !data || pageOutOfRange ? (
+      {/* Also when cached data is still shown: a failed revalidation must not go unnoticed. */}
+      {error && <ErrorAlert error={describeError(error)} onRetry={() => void refetch()} />}
+
+      {!data || pageOutOfRange ? (
         loading && <LoadingState label="Loading properties…" />
       ) : totalCount === 0 ? (
         <EmptyState filtered={hasFilters} onClearFilters={() => setFilters({})} />

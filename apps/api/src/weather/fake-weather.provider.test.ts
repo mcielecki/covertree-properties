@@ -72,6 +72,23 @@ describe('FakeWeatherProvider', () => {
     expect(fake.calls).toEqual(['85268']);
   });
 
+  it('with a barrier, holds every call until that many calls have arrived', async () => {
+    const fake = new FakeWeatherProvider({ barrier: 2 });
+    let firstSettled = false;
+
+    const first = fake.getCurrentByZip('85268').finally(() => {
+      firstSettled = true;
+    });
+    // Let any already-resolved promise settle before checking that the first call is still held.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(firstSettled).toBe(false);
+
+    const second = fake.getCurrentByZip('85268');
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(fake.calls).toEqual(['85268', '85268']);
+  });
+
   it('waits for the configured delay before answering', async () => {
     const fake = new FakeWeatherProvider({ delayMs: 30 });
 

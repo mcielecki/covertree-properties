@@ -29,6 +29,8 @@ const DEFAULT_LOOKUP: WeatherLookup = {
 export interface FakeWeatherProviderOptions {
   lookup?: WeatherLookup;
   delayMs?: number;
+  /** Holds every call until this many calls have arrived, then releases them together. */
+  barrier?: number;
 }
 
 /**
@@ -39,11 +41,14 @@ export class FakeWeatherProvider implements WeatherProvider {
   readonly calls: string[] = [];
   private readonly lookup: WeatherLookup;
   private readonly delayMs: number;
+  private readonly barrier: number;
+  private readonly waiting: (() => void)[] = [];
   private error: Error | undefined;
 
   constructor(options: FakeWeatherProviderOptions = {}) {
     this.lookup = options.lookup ?? DEFAULT_LOOKUP;
     this.delayMs = options.delayMs ?? 0;
+    this.barrier = options.barrier ?? 0;
   }
 
   /** Every following call throws `error` until reset(). */
@@ -59,6 +64,14 @@ export class FakeWeatherProvider implements WeatherProvider {
 
   async getCurrentByZip(zipCode: string): Promise<WeatherLookup> {
     this.calls.push(zipCode);
+    if (this.barrier > 0) {
+      await new Promise<void>((resolve) => {
+        this.waiting.push(resolve);
+        if (this.waiting.length >= this.barrier) {
+          this.waiting.splice(0).forEach((release) => release());
+        }
+      });
+    }
     if (this.delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.delayMs));
     }
