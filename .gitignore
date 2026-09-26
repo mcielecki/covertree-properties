@@ -5,6 +5,9 @@ node_modules/
 dist/
 build/
 coverage/
+test-results/
+playwright-report/
+blob-report/
 
 # env & secrets
 .env

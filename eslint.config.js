@@ -18,7 +18,11 @@ export default defineConfig(
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          // Outside apps/web/tsconfig.json (browser, no Node types); typed via the e2e config.
+          allowDefaultProject: ['apps/web/playwright.config.ts'],
+          defaultProject: 'apps/web/e2e/tsconfig.json',
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },

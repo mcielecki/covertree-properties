@@ -8,14 +8,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "codegen": "graphql-codegen",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^7.4.3",
     "@graphql-codegen/client-preset": "^6.2.0",
     "@graphql-typed-document-node/core": "^3.2.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

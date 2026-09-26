@@ -684,8 +684,12 @@ covertree-properties/
 │       ├── index.html            # Vite entry
 │       ├── public/favicon.svg
 │       ├── codegen.ts            # client preset → src/gql/ (schema read from apps/api SDL files)
-│       ├── playwright.config.ts  # webServer: api (WEATHER_PROVIDER=fake, covertree_e2e DB) + web
-│       ├── e2e/property-smoke.spec.ts
+│       ├── playwright.config.ts  # webServer: api :4100 (WEATHER_PROVIDER=fake, covertree_e2e DB) + web :5174
+│       ├── e2e/
+│       │   ├── property-smoke.spec.ts
+│       │   ├── global-setup.ts               # `prisma migrate deploy` + TRUNCATE via the api's Prisma CLI
+│       │   ├── e2e-database.ts               # E2E_DATABASE_URL + `_e2e` guard (unit-tested in `pnpm test`)
+│       │   └── tsconfig.json                 # Node types; also types playwright.config.ts (ESLint defaultProject)
 │       └── src/
 │           ├── main.tsx, App.tsx (layout), router.tsx (lazy routes, shared with tests)
 │           ├── index.css                       # Tailwind @theme tokens (canopy #00806A, …), Public Sans, component classes
@@ -763,6 +767,7 @@ manual list merging and a single type policy.
 |---|---|---|---|
 | `DATABASE_URL` | api | — (required) | |
 | `TEST_DATABASE_URL` | api tests | `postgresql://covertree:covertree@localhost:5432/covertree_test` | integration tests only; the database name must end with `_test`; never falls back to `DATABASE_URL` |
+| `E2E_DATABASE_URL` | web E2E | `postgresql://covertree:covertree@localhost:5432/covertree_e2e` | Playwright only; the database name must end with `_e2e`; never falls back to `DATABASE_URL` |
 | `WEATHERSTACK_API_KEY` | api | — (required unless `WEATHER_PROVIDER=fake`) | never committed |
 | `WEATHERSTACK_BASE_URL` | api | `https://api.weatherstack.com` | set to `http://…` if your plan rejects HTTPS |
 | `WEATHERSTACK_TIMEOUT_MS` | api | `5000` | |
@@ -869,6 +874,20 @@ it is gone. The API runs with `WEATHER_PROVIDER=fake` against its own `covertree
 separate from `covertree_test`, so E2E and integration runs never truncate each other's data. That
 database is migrated and truncated in Playwright's `globalSetup`. The test is deterministic and uses
 no API quota. It runs with `pnpm test:e2e` and is not part of `pnpm test`.
+
+- **Own servers on their own ports.** Playwright starts the api on `:4100` and Vite on `:5174`
+  with `reuseExistingServer: false`, so a running `pnpm dev` (`:4000`/`:5173`, dev database) is
+  never reused and the flow cannot write to dev data. Both binaries are started directly
+  (`node_modules/.bin/tsx`, `node_modules/.bin/vite`), not through `pnpm exec`, whose child process
+  outlived Playwright's teardown. Both stop with `SIGTERM` (`gracefulShutdown`).
+- **Database.** `E2E_DATABASE_URL` (environment, else the repo-root `.env`, else the compose default)
+  must name a database ending in `_e2e`; it never falls back to `DATABASE_URL`. Playwright starts
+  `webServer` before `globalSetup`; that is safe because the api touches the database only on the
+  first request. `globalSetup` runs the api's Prisma CLI with `DATABASE_URL` set for the child
+  process only: `migrate deploy`, then `db execute --stdin` with `TRUNCATE TABLE properties`
+  (Prisma 7 removed `--url`, so the URL comes from `prisma.config.ts`).
+- **Locators** are role- and label-based only. The confirmation is an `alertdialog`.
+- One-time setup: `pnpm --filter @covertree/web exec playwright install chromium`.
 
 ### 7.5 What is faked and what is real
 
