@@ -1,3 +1,8 @@
 packages:
   - apps/*
   - packages/*
+# Install scripts are opt-in (pnpm 10+). Prisma fetches its schema engine on install.
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true

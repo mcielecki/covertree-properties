@@ -1,0 +1,87 @@
+// SPEC §3. The datasource URL lives in prisma.config.ts (Prisma 7).
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// One value per line (Prisma syntax). Same values as US_STATES and the GraphQL USState.
+enum USState {
+  AL
+  AK
+  AZ
+  AR
+  CA
+  CO
+  CT
+  DE
+  DC
+  FL
+  GA
+  HI
+  ID
+  IL
+  IN
+  IA
+  KS
+  KY
+  LA
+  ME
+  MD
+  MA
+  MI
+  MN
+  MS
+  MO
+  MT
+  NE
+  NV
+  NH
+  NJ
+  NM
+  NY
+  NC
+  ND
+  OH
+  OK
+  OR
+  PA
+  RI
+  SC
+  SD
+  TN
+  TX
+  UT
+  VT
+  VA
+  WA
+  WV
+  WI
+  WY
+}
+
+model Property {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  street      String   @db.VarChar(200)
+  city        String   @db.VarChar(100)
+  /// toCityKey(city): normalized lowercase city; used for case-insensitive equality filtering.
+  cityKey     String   @map("city_key") @db.VarChar(100)
+  state       USState
+  zipCode     String   @map("zip_code") @db.Char(5)
+  /// Normalized lowercase "street|city|state|zip"; enforces uniqueness of addresses.
+  addressKey  String   @unique @map("address_key")
+  lat         Float
+  long        Float
+  /// Raw Weatherstack `current` object (units=f).
+  weatherData Json     @map("weather_data")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt, id])
+  @@index([cityKey])
+  @@index([state])
+  @@index([zipCode])
+  @@map("properties")
+}

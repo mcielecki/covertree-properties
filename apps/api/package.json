@@ -4,11 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "prisma generate",
+    "codegen": "prisma generate",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration"
   },
   "dependencies": {
+    "@covertree/validation": "workspace:*",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "dotenv": "^18.0.3",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "prisma": "7.10.0"
   }
 }

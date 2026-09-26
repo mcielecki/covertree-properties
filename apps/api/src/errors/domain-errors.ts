@@ -23,3 +23,32 @@ export class WeatherUnavailableError extends Error {
     this.providerCode = options.providerCode;
   }
 }
+
+/** zod validation failed for an argument. → BAD_USER_INPUT with `fieldErrors`. */
+export class ValidationError extends Error {
+  override readonly name = 'ValidationError';
+
+  /** Field path (e.g. "zipCode", "limit") → human-readable messages. */
+  constructor(readonly fieldErrors: Record<string, string[]>) {
+    super('Invalid input');
+  }
+}
+
+/** The normalized address is already stored. → ALREADY_EXISTS */
+export class AlreadyExistsError extends Error {
+  override readonly name = 'AlreadyExistsError';
+
+  /** `id` of the existing property, when known (not after a unique-constraint race). */
+  constructor(readonly id?: string) {
+    super('A property with this address already exists');
+  }
+}
+
+/** No property has this id. → NOT_FOUND */
+export class NotFoundError extends Error {
+  override readonly name = 'NotFoundError';
+
+  constructor(readonly id: string) {
+    super('Property not found');
+  }
+}

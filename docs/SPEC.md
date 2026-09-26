@@ -357,8 +357,10 @@ datasource db {
 }
 
 enum USState {
-  AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO
-  MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY
+  AL
+  AK
+  // ... one value per line (Prisma syntax), same 51 values as the GraphQL USState
+  WY
 }
 
 model Property {
@@ -390,6 +392,11 @@ Notes:
   datasource URL moves to `prisma.config.ts` (`defineConfig({ schema, migrations, datasource: { url } })`),
   which must `import 'dotenv/config'` because Prisma 7 no longer loads `.env` itself. The runtime
   client uses the driver adapter `@prisma/adapter-pg` (`new PrismaPg({ connectionString })`).
+- **Version pin:** `prisma` is pinned to `7.10.0`. At implementation time its npm `latest` tag
+  pointed at an 8.0 release candidate, while `@prisma/client` and `@prisma/adapter-pg` were on
+  7.10.0. `prisma.config.ts` reads `DATABASE_URL` with `process.env`, not `env()`, because `env()`
+  throws when the variable is unset and `prisma generate` (run on `postinstall`) must work
+  without a database.
 - **`gen_random_uuid()`** is built into Postgres 13 and later, so the database generates the id as
   the requirements ask.
 - **`addressKey` and `cityKey` instead of expression indexes.** Prisma's schema cannot express
@@ -537,7 +544,7 @@ resolver createProperty
   → PropertyService.create(input)
       1. validate + normalize input (zod)          → BAD_USER_INPUT
       2. addressKey = toAddressKey(normalized); cityKey = toCityKey(normalized.city)
-      3. repository.existsByAddressKey(addressKey) → ALREADY_EXISTS   (no API call spent)
+      3. repository.findIdByAddressKey(addressKey) → ALREADY_EXISTS { id }   (no API call spent)
       4. weather.getCurrentByZip(zipCode)          → LOCATION_NOT_FOUND / WEATHER_SERVICE_UNAVAILABLE
       5. repository.create({...normalized, addressKey, cityKey, lat, long, weatherData: current})
            P2002 unique violation (race)           → ALREADY_EXISTS
@@ -545,7 +552,8 @@ resolver createProperty
 ```
 
 No database transaction spans the HTTP call. The unique constraint in step 5 is the real guarantee.
-Step 3 is only an optimization that saves quota.
+Step 3 is only an optimization that saves quota. It returns the existing id, so `ALREADY_EXISTS`
+can carry it (§5). After a race in step 5 the id is not known and is omitted.
 
 ---
 
@@ -567,6 +575,9 @@ Resolvers do not catch errors.
 | `WEATHER_SERVICE_UNAVAILABLE` | Timeout, network, quota, auth, HTTPS restriction, bad response | `"Weather service is unavailable, please try again later"` | — |
 | `INTERNAL_SERVER_ERROR` | Anything unexpected (masked by Yoga) | `"Unexpected error."` | Only in dev: `originalError` |
 
+- `fieldErrors` keys are the zod issue path relative to the validated argument: `street`, `city`,
+  `state`, `zipCode` for `createProperty` input and for `PropertyFilter`, `limit` / `offset`, and
+  `id`. Each field carries exactly one message (the first failing rule).
 - HTTP status: Yoga's defaults apply. Execution errors return 200 with `errors[]` (as in the
   GraphQL-over-HTTP spec), and parse/validation errors return 400. Domain errors do not set
   `extensions.http`.
@@ -630,6 +641,8 @@ covertree-properties/
 │   │       ├── property/
 │   │       │   ├── property.service.ts          # business logic; depends on the two interfaces below
 │   │       │   ├── property.repository.ts       # PropertyRepository interface
+│   │       │   ├── property.repository.contract.ts  # shared suite run against both repositories
+│   │       │   ├── in-memory-property.repository.ts # fake for unit tests (unique addressKey, ordering)
 │   │       │   ├── prisma-property.repository.ts
 │   │       │   ├── keys.ts                      # toAddressKey(), toCityKey()
 │   │       │   └── property.types.ts            # PropertyRecord, ListParams, ...
@@ -647,8 +660,9 @@ covertree-properties/
 │   │       ├── db/prisma.ts                     # PrismaClient with @prisma/adapter-pg
 │   │       └── generated/prisma/                # generated, gitignored
 │   │   └── test/
+│   │       ├── global-setup.ts                  # _test guard + `prisma migrate deploy`
 │   │       ├── integration/*.test.ts            # yoga.fetch + real Postgres
-│   │       └── helpers/{graphql.ts, db.ts}
+│   │       └── helpers/{graphql.ts, db.ts, test-database.ts}  # test-database: TEST_DATABASE_URL + guard
 │   └── web/
 │       ├── Dockerfile            # vite build → nginx static
 │       ├── codegen.ts            # client preset → src/gql/ (schema read from apps/api SDL files)
@@ -701,6 +715,7 @@ custom `typePolicies` or manual list merging.
 | Var | App | Default | Notes |
 |---|---|---|---|
 | `DATABASE_URL` | api | — (required) | |
+| `TEST_DATABASE_URL` | api tests | `postgresql://covertree:covertree@localhost:5432/covertree_test` | integration tests only; the database name must end with `_test`; never falls back to `DATABASE_URL` |
 | `WEATHERSTACK_API_KEY` | api | — (required unless `WEATHER_PROVIDER=fake`) | never committed |
 | `WEATHERSTACK_BASE_URL` | api | `https://api.weatherstack.com` | set to `http://…` if your plan rejects HTTPS |
 | `WEATHERSTACK_TIMEOUT_MS` | api | `5000` | |
@@ -740,9 +755,17 @@ Every test maps back to an AC id where possible (`it('AC-5.7: rejects duplicate 
 
 - `createApp()` is built with the real `PrismaPropertyRepository` against the `covertree_test`
   database and a `FakeWeatherProvider`. Requests go through `yoga.fetch`, with no network port.
-- The schema is migrated once per run (`prisma migrate reset --force --skip-seed` in globalSetup).
-  Tables are truncated before each test. Test files run serially (`fileParallelism: false`)
-  because they share the database.
+- The integration project connects only to `TEST_DATABASE_URL` (from the environment, else the
+  repo-root `.env`, else the compose default). It never reads `DATABASE_URL`. globalSetup refuses
+  to run, with a clear error, unless the database name ends with `_test`.
+- The schema is migrated once per run with `prisma migrate deploy` in globalSetup (`DATABASE_URL` is
+  set to the test URL for that child process only). Not `migrate reset`: Prisma 7 refuses
+  destructive migrate commands when an AI agent runs them, and `deploy` is enough on a database
+  whose data the tests truncate anyway. If a committed migration is ever edited, reset
+  `covertree_test` manually once. Tables are truncated before each test. Test files run serially
+  (`fileParallelism: false`) because they share the database.
+- `PrismaPropertyRepository` runs the same contract suite as the in-memory fake
+  (`property.repository.contract.ts`), so the fake used by the service unit tests cannot drift.
 - **Coverage:** the full GraphQL surface end to end. That means every AC in US-1…US-7, including
   error codes and shapes, the default and max limit, sort stability, case-insensitive city via `cityKey`,
   ALREADY_EXISTS from the unique constraint (AC-5.12, run with `Promise.all`), and that queries
