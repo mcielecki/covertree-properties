@@ -320,11 +320,17 @@ extend type Mutation {
 | `city` | 1–100 chars, matches `^[\p{L}][\p{L} .'-]*$` (Unicode letters, space, `.`, `'`, `-`) |
 | `zipCode` | `^\d{5}$` |
 | `state` | enforced by the GraphQL enum; zod re-checks it as `z.enum(US_STATES)` for defense in depth |
-| `id` args | `z.string().uuid()` |
-| `limit` | integer, 1–100 |
-| `offset` | integer, ≥ 0 |
+| `id` args | `z.uuid()` (RFC 9562; zod 4 deprecates `z.string().uuid()`) |
+| `limit` | integer, 1–100; explicit `null` → default 20 |
+| `offset` | integer, ≥ 0; explicit `null` → default 0 |
 
-The same rules apply to `PropertyFilter.city` and `PropertyFilter.zipCode`.
+The same rules apply to `PropertyFilter.city` and `PropertyFilter.zipCode`. A `null` or omitted
+filter field means no constraint (AC-3.9). An empty or whitespace-only filter value fails the
+1-char rule and is `BAD_USER_INPUT`, so the web client omits empty inputs. GraphQL applies
+argument defaults only when an argument is omitted, which is why `null` for `limit`/`offset` is
+mapped to the default by the schema. Validation messages are human-readable (e.g. "Zip code must
+be exactly 5 digits"), one per field, because the web form shows them inline and the API returns
+them in `fieldErrors`.
 
 **Case-insensitive city filter.** One pure function, `toCityKey(city)`, normalizes a city and
 lowercases it. It runs both when a property is written (stored in `cityKey`) and on
@@ -405,11 +411,21 @@ Notes:
 ### 4.1 Port
 
 ```ts
-// apps/api/src/weather/weather-provider.ts
+// apps/api/src/weather/weather-provider.ts — plain TypeScript, no zod, no adapter imports
+export interface WeatherCurrent {
+  observation_time: string;
+  temperature: number;
+  weather_descriptions: string[];
+  weather_icons: string[];
+  feelslike?: number;               // ...the other optional fields of §4.3
+  is_day?: 'yes' | 'no';
+  [key: string]: unknown;           // unmodelled extras (astro, air_quality, ...)
+}
+
 export interface WeatherLookup {
   lat: number;
   long: number;
-  current: WeatherCurrent;          // zod-inferred type of the validated `current` object
+  current: WeatherCurrent;
 }
 
 export interface WeatherProvider {
@@ -417,6 +433,11 @@ export interface WeatherProvider {
   getCurrentByZip(zipCode: string): Promise<WeatherLookup>;
 }
 ```
+
+**Dependency direction.** The port owns the domain types. Adapters import from it, and it imports
+nothing from `weather/weatherstack/`. The adapter's zod schema is declared
+`weatherCurrentSchema = z.looseObject({...}) satisfies z.ZodType<WeatherCurrent>`, so a schema
+whose output drifts from the domain type fails `tsc`.
 
 Implementations:
 - `WeatherstackProvider`, the real adapter.
@@ -486,12 +507,13 @@ Parsing order:
      `pressure`, `precip`, `humidity`, `cloudcover`, `uv_index`, `visibility`, `is_day`) is
      **optional**, declared as `.optional().catch(undefined)`. If one is missing or has the wrong
      type it becomes `undefined` and never fails the parse. `is_day` must be `"yes"` or `"no"`.
-   - The schema uses `.passthrough()` so fields we don't model (e.g. `astro`, `air_quality`) are
-     kept in the stored JSON.
+   - The schema is a `z.looseObject()` (zod 4; `.passthrough()` is deprecated) so fields we
+     don't model (e.g. `astro`, `air_quality`) are kept in the stored JSON.
    - If a required field fails or `location` is unusable → `WeatherUnavailableError`. The zod issues
      are logged, but not the body.
 5. The adapter returns `{ lat, long, current }`. `current` is exactly the validated object, extras
-   included. Fields dropped by `.catch` are omitted. The `WeatherData` resolvers turn any absent
+   included. Fields dropped by `.catch` are omitted (zod returns them as `key: undefined`, so the
+   adapter strips undefined keys). The `WeatherData` resolvers turn any absent
    optional field into `null`.
 
 ### 4.4 Error mapping
@@ -591,6 +613,7 @@ covertree-properties/
 │   │       ├── app.ts            # createApp(deps) → yoga instance (used by main and tests)
 │   │       ├── config/env.ts     # zod-parsed process.env
 │   │       ├── context.ts        # GraphQLContext { propertyService }
+│   │       ├── logger.ts         # Logger interface (info/warn/error); `console` satisfies it
 │   │       ├── schema/           # SDL + resolvers (server preset layout)
 │   │       │   ├── base/schema.graphql
 │   │       │   ├── property/

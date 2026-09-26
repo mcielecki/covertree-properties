@@ -1,0 +1,17 @@
+{
+  "request": { "type": "Zipcode", "query": "85268", "language": "en", "unit": "f" },
+  "location": {
+    "name": "Fountain Hills",
+    "country": "USA",
+    "region": "Arizona",
+    "lat": "33.609",
+    "lon": "-111.724"
+  },
+  "current": {
+    "observation_time": "08:54 AM",
+    "weather_icons": [
+      "https://cdn.worldweatheronline.com/images/wsymbols01_png_64/wsymbol_0008_clear_sky_night.png"
+    ],
+    "weather_descriptions": ["Clear "]
+  }
+}

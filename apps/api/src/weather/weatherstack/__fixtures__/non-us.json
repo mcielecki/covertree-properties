@@ -1,0 +1,18 @@
+{
+  "request": { "type": "Zipcode", "query": "85268", "language": "en", "unit": "f" },
+  "location": {
+    "name": "Toronto",
+    "country": "Canada",
+    "region": "Ontario",
+    "lat": "43.667",
+    "lon": "-79.417"
+  },
+  "current": {
+    "observation_time": "08:54 AM",
+    "temperature": 61,
+    "weather_icons": [
+      "https://cdn.worldweatheronline.com/images/wsymbols01_png_64/wsymbol_0001_sunny.png"
+    ],
+    "weather_descriptions": ["Sunny"]
+  }
+}
