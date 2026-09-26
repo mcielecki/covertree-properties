@@ -36,7 +36,7 @@ describe('CreatePropertyPage (AC-W.4)', () => {
   it('shows inline messages for invalid fields and does not send the request', async () => {
     const user = userEvent.setup();
     const createResult = vi.fn(() => ({ data: { createProperty: { id: PROPERTY_ID } } }));
-    renderApp('/properties/new', [
+    await renderApp('/properties/new', [
       { request: { query: CREATE_PROPERTY, variables: () => true }, result: createResult },
     ]);
 
@@ -54,8 +54,21 @@ describe('CreatePropertyPage (AC-W.4)', () => {
     expect(createResult).not.toHaveBeenCalled();
   });
 
+  it('moves focus to the first invalid field and announces how many need fixing', async () => {
+    const user = userEvent.setup();
+    await renderApp('/properties/new');
+
+    await user.type(screen.getByLabelText('Street'), '1 Main St');
+    await user.type(screen.getByLabelText('Zip code'), '8526');
+    await user.click(screen.getByRole('button', { name: 'Create property' }));
+
+    expect(screen.getByLabelText('City')).toHaveFocus();
+    expect(screen.getByLabelText('City')).toHaveAccessibleDescription('City is required');
+    expect(screen.getByRole('status')).toHaveTextContent('3 fields need attention.');
+  });
+
   it('sends the normalized input and navigates to the new property', async () => {
-    const { router } = renderApp('/properties/new', [
+    const { router } = await renderApp('/properties/new', [
       createMock({ data: { createProperty: { __typename: 'Property', id: PROPERTY_ID } } }),
       {
         request: { query: PROPERTY_QUERY, variables: { id: PROPERTY_ID } },
@@ -78,7 +91,7 @@ describe('CreatePropertyPage (AC-W.4)', () => {
   it('AC-W.6: refetches the active list query after creating', async () => {
     const firstList = vi.fn(() => propertyPage([]));
     const refetchedList = vi.fn(() => propertyPage([listItem()]));
-    const { client } = renderApp('/properties/new', [
+    const { client } = await renderApp('/properties/new', [
       {
         request: { query: PROPERTIES_QUERY, variables: DEFAULT_LIST_VARIABLES },
         result: firstList,
@@ -106,7 +119,7 @@ describe('CreatePropertyPage (AC-W.4)', () => {
   });
 
   it('ALREADY_EXISTS links to the existing property', async () => {
-    renderApp('/properties/new', [
+    await renderApp('/properties/new', [
       createMock(graphQLErrorResult('ALREADY_EXISTS', { id: PROPERTY_ID })),
     ]);
 
@@ -133,7 +146,7 @@ describe('CreatePropertyPage (AC-W.4)', () => {
     ],
     ['INTERNAL_SERVER_ERROR', {}, 'Something went wrong. Please try again.'],
   ])('%s renders its message', async (code, extensions, message) => {
-    renderApp('/properties/new', [createMock(graphQLErrorResult(code, extensions))]);
+    await renderApp('/properties/new', [createMock(graphQLErrorResult(code, extensions))]);
 
     await fillForm(VALID_INPUT);
 
@@ -144,7 +157,7 @@ describe('CreatePropertyPage (AC-W.4)', () => {
   });
 
   it('BAD_USER_INPUT shows the API field errors next to their fields', async () => {
-    renderApp('/properties/new', [
+    await renderApp('/properties/new', [
       createMock(
         graphQLErrorResult('BAD_USER_INPUT', {
           fieldErrors: { zipCode: ['Zip code is not served'] },
@@ -160,7 +173,7 @@ describe('CreatePropertyPage (AC-W.4)', () => {
   });
 
   it('AC-W.7: disables the button while the property is being created', async () => {
-    renderApp('/properties/new', [
+    await renderApp('/properties/new', [
       {
         ...createMock({ data: { createProperty: { __typename: 'Property', id: PROPERTY_ID } } }),
         delay: 50,

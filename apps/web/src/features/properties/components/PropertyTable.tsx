@@ -5,40 +5,68 @@ import { DeleteButton } from './DeleteButton';
 
 type PropertyRow = PropertiesQuery['properties']['items'][number];
 
+/**
+ * A table on wide screens; below `md` each row is laid out as a card by `.property-table` in
+ * index.css. The explicit roles keep table semantics when CSS changes the `display` values.
+ */
 export function PropertyTable({ items }: { items: readonly PropertyRow[] }) {
   return (
-    <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-      <table className="w-full text-left text-sm">
-        <thead className="border-b border-gray-200 bg-gray-100 text-gray-700">
-          <tr>
-            <th className="px-3 py-2 font-medium">Street</th>
-            <th className="px-3 py-2 font-medium">City</th>
-            <th className="px-3 py-2 font-medium">State</th>
-            <th className="px-3 py-2 font-medium">Zip code</th>
-            <th className="px-3 py-2 font-medium">Temperature</th>
-            <th className="px-3 py-2 font-medium">Created</th>
-            <th className="px-3 py-2">
+    <div className="panel overflow-hidden">
+      <table role="table" className="property-table w-full text-left">
+        <caption className="sr-only">Properties</caption>
+        <thead role="rowgroup">
+          <tr role="row">
+            <th role="columnheader" scope="col">
+              Street
+            </th>
+            <th role="columnheader" scope="col">
+              City
+            </th>
+            <th role="columnheader" scope="col">
+              State
+            </th>
+            <th role="columnheader" scope="col">
+              Zip code
+            </th>
+            <th role="columnheader" scope="col" className="text-right">
+              Temperature
+            </th>
+            <th role="columnheader" scope="col">
+              Created
+            </th>
+            <th role="columnheader" scope="col">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           {items.map((property) => (
-            <tr key={property.id} className="border-b border-gray-100 last:border-0">
-              <td className="px-3 py-2">
-                <Link to={`/properties/${property.id}`} className="text-blue-700 underline">
+            <tr role="row" key={property.id}>
+              <td role="cell" data-cell="street">
+                <Link to={`/properties/${property.id}`} className="link">
                   {property.street}
                 </Link>
               </td>
-              <td className="px-3 py-2">{property.city}</td>
-              <td className="px-3 py-2">{property.state}</td>
-              <td className="px-3 py-2">{property.zipCode}</td>
-              <td className="px-3 py-2">{formatTemperature(property.weatherData.temperature)}</td>
-              <td className="px-3 py-2">{formatCreatedDate(property.createdAt)}</td>
-              <td className="px-3 py-2 text-right">
+              <td role="cell" data-cell="city">
+                {property.city}
+              </td>
+              <td role="cell" data-cell="state">
+                {property.state}
+              </td>
+              <td role="cell" data-cell="zip" className="tabular-nums">
+                {property.zipCode}
+              </td>
+              <td role="cell" data-cell="temperature" className="text-right tabular-nums">
+                {formatTemperature(property.weatherData.temperature)}
+              </td>
+              <td role="cell" data-cell="created" className="tabular-nums">
+                {formatCreatedDate(property.createdAt)}
+              </td>
+              <td role="cell" data-cell="actions">
                 <DeleteButton
                   id={property.id}
                   address={`${property.street}, ${property.city}, ${property.state} ${property.zipCode}`}
+                  className="md:items-end"
                 />
               </td>
             </tr>

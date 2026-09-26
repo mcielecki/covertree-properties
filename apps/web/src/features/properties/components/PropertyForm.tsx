@@ -3,7 +3,7 @@ import {
   US_STATES,
   type NormalizedPropertyInput,
 } from '@covertree/validation';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 type Field = 'street' | 'city' | 'state' | 'zipCode';
 type Values = Record<Field, string>;
@@ -17,11 +17,14 @@ interface PropertyFormProps {
 }
 
 const EMPTY: Values = { street: '', city: '', state: '', zipCode: '' };
+const FIELD_ORDER: readonly Field[] = ['street', 'city', 'state', 'zipCode'];
 
 /** Validates with the shared zod schema, so the rules match the API exactly (AC-W.4). */
 export function PropertyForm({ onSubmit, submitting, serverErrors }: PropertyFormProps) {
   const [values, setValues] = useState<Values>(EMPTY);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [summary, setSummary] = useState('');
+  const formRef = useRef<HTMLFormElement>(null);
 
   function update(field: Field, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -38,16 +41,28 @@ export function PropertyForm({ onSubmit, submitting, serverErrors }: PropertyFor
         next[field] ??= issue.message;
       }
       setErrors(next);
+      const invalid = FIELD_ORDER.filter((field) => next[field]);
+      setSummary(
+        invalid.length === 1
+          ? '1 field needs attention.'
+          : `${invalid.length} fields need attention.`,
+      );
+      // Focus lands on the first problem; its message is read as the field's description.
+      formRef.current?.querySelector<HTMLElement>(`[name="${invalid[0]}"]`)?.focus();
       return;
     }
     setErrors({});
+    setSummary('');
     onSubmit(result.data);
   }
 
   const errorFor = (field: Field) => errors[field] ?? serverErrors?.[field];
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="max-w-md space-y-4">
+    <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-5">
+      <p role="status" className="sr-only">
+        {summary}
+      </p>
       <FormField label="Street" name="street" error={errorFor('street')}>
         {(props) => (
           <input
@@ -70,41 +85,46 @@ export function PropertyForm({ onSubmit, submitting, serverErrors }: PropertyFor
           />
         )}
       </FormField>
-      <FormField label="State" name="state" error={errorFor('state')}>
-        {(props) => (
-          <select
-            {...props}
-            value={values.state}
-            onChange={(event) => update('state', event.target.value)}
-          >
-            <option value="">Select a state</option>
-            {US_STATES.map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
-            ))}
-          </select>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField label="State" name="state" error={errorFor('state')}>
+          {(props) => (
+            <select
+              {...props}
+              value={values.state}
+              onChange={(event) => update('state', event.target.value)}
+              autoComplete="address-level1"
+            >
+              <option value="">Select a state</option>
+              {US_STATES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
+        <FormField label="Zip code" name="zipCode" error={errorFor('zipCode')}>
+          {(props) => (
+            <input
+              {...props}
+              value={values.zipCode}
+              onChange={(event) => update('zipCode', event.target.value)}
+              placeholder="85268"
+              inputMode="numeric"
+              autoComplete="postal-code"
+              className={`${props.className} tabular-nums`}
+            />
+          )}
+        </FormField>
+      </div>
+      <div className="flex flex-col gap-3 border-t border-mist pt-6 sm:flex-row sm:items-center">
+        <button type="submit" disabled={submitting} className="btn btn-primary">
+          {submitting ? 'Creating…' : 'Create property'}
+        </button>
+        {submitting && (
+          <p className="text-sm text-slate">Looking up the current weather for this zip code…</p>
         )}
-      </FormField>
-      <FormField label="Zip code" name="zipCode" error={errorFor('zipCode')}>
-        {(props) => (
-          <input
-            {...props}
-            value={values.zipCode}
-            onChange={(event) => update('zipCode', event.target.value)}
-            placeholder="85268"
-            inputMode="numeric"
-            autoComplete="postal-code"
-          />
-        )}
-      </FormField>
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-      >
-        {submitting ? 'Creating…' : 'Create property'}
-      </button>
+      </div>
     </form>
   );
 }
@@ -127,8 +147,8 @@ interface FormFieldProps {
 function FormField({ label, name, error, children }: FormFieldProps) {
   const id = `property-${name}`;
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="field-label">
         {label}
       </label>
       {children({
@@ -136,10 +156,10 @@ function FormField({ label, name, error, children }: FormFieldProps) {
         name,
         'aria-invalid': error ? true : undefined,
         'aria-describedby': error ? `${id}-error` : undefined,
-        className: 'rounded border border-gray-300 bg-white px-2 py-1.5',
+        className: 'field-control',
       })}
       {error && (
-        <p id={`${id}-error`} className="text-sm text-red-700">
+        <p id={`${id}-error`} className="field-error">
           {error}
         </p>
       )}

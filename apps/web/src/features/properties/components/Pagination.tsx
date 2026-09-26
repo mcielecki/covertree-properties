@@ -11,18 +11,18 @@ export function Pagination({ page, totalPages, onChange }: PaginationProps) {
         type="button"
         onClick={() => onChange(page - 1)}
         disabled={page <= 1}
-        className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40"
+        className="btn btn-secondary"
       >
         Previous
       </button>
-      <span>
+      <span className="text-slate tabular-nums">
         Page {page} of {totalPages}
       </span>
       <button
         type="button"
         onClick={() => onChange(page + 1)}
         disabled={page >= totalPages}
-        className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40"
+        className="btn btn-secondary"
       >
         Next
       </button>

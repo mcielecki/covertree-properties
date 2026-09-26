@@ -1,4 +1,6 @@
 import { useMutation } from '@apollo/client/react';
+import { useState } from 'react';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { ErrorAlert } from '../../../components/Feedback';
 import { describeError } from '../../../lib/error-messages';
 import { DELETE_PROPERTY } from '../api/mutations';
@@ -6,39 +8,57 @@ import { PROPERTIES_QUERY } from '../api/queries';
 
 interface DeleteButtonProps {
   id: string;
-  /** Shown in the confirmation prompt. */
+  /** Shown in the confirmation dialog. */
   address: string;
   onDeleted?: () => void;
+  className?: string;
 }
 
 /** Asks for confirmation, deletes, then refetches the active list query (AC-W.6). */
-export function DeleteButton({ id, address, onDeleted }: DeleteButtonProps) {
+export function DeleteButton({ id, address, onDeleted, className = '' }: DeleteButtonProps) {
+  const [confirming, setConfirming] = useState(false);
   const [deleteProperty, { loading, error }] = useMutation(DELETE_PROPERTY, {
     refetchQueries: [PROPERTIES_QUERY],
     awaitRefetchQueries: true,
   });
 
-  async function handleClick() {
-    if (!window.confirm(`Delete ${address}? This cannot be undone.`)) return;
+  async function handleConfirm() {
     try {
       await deleteProperty({ variables: { id } });
     } catch {
+      setConfirming(false);
       return; // The hook's `error` renders the message below.
     }
-    onDeleted?.();
+    setConfirming(false);
+    if (onDeleted) {
+      onDeleted();
+    } else {
+      // The row holding this button is gone, so focus would fall back to <body>.
+      document.getElementById('main')?.focus();
+    }
   }
 
   return (
-    <div className="inline-flex flex-col items-start gap-1">
+    <div className={`flex flex-col items-start gap-2 ${className}`}>
       <button
         type="button"
-        onClick={() => void handleClick()}
+        onClick={() => setConfirming(true)}
         disabled={loading}
         aria-label={`Delete ${address}`}
-        className="rounded border border-red-300 px-2 py-1 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+        className="btn btn-danger-quiet"
       >
         {loading ? 'Deleting…' : 'Delete'}
       </button>
+      <ConfirmDialog
+        open={confirming}
+        title="Delete this property?"
+        description={`${address} will be permanently removed.`}
+        confirmLabel="Delete property"
+        busyLabel="Deleting…"
+        busy={loading}
+        onConfirm={() => void handleConfirm()}
+        onCancel={() => setConfirming(false)}
+      />
       {error && <ErrorAlert error={describeError(error)} />}
     </div>
   );

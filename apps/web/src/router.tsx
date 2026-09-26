@@ -1,16 +1,35 @@
 import { createBrowserRouter, Link, type RouteObject } from 'react-router';
 import { App } from './App';
-import { CreatePropertyPage } from './features/properties/pages/CreatePropertyPage';
-import { PropertyDetailsPage } from './features/properties/pages/PropertyDetailsPage';
-import { PropertyListPage } from './features/properties/pages/PropertyListPage';
+import { LoadingState } from './components/Feedback';
 
+// Each page is its own chunk, loaded by the router before the page renders.
 export const routes: RouteObject[] = [
   {
     element: <App />,
+    // Shown on the very first load, while the matched page's chunk downloads.
+    HydrateFallback: () => <LoadingState />,
     children: [
-      { index: true, element: <PropertyListPage /> },
-      { path: 'properties/new', element: <CreatePropertyPage /> },
-      { path: 'properties/:id', element: <PropertyDetailsPage /> },
+      {
+        index: true,
+        lazy: async () => ({
+          Component: (await import('./features/properties/pages/PropertyListPage'))
+            .PropertyListPage,
+        }),
+      },
+      {
+        path: 'properties/new',
+        lazy: async () => ({
+          Component: (await import('./features/properties/pages/CreatePropertyPage'))
+            .CreatePropertyPage,
+        }),
+      },
+      {
+        path: 'properties/:id',
+        lazy: async () => ({
+          Component: (await import('./features/properties/pages/PropertyDetailsPage'))
+            .PropertyDetailsPage,
+        }),
+      },
       { path: '*', element: <PageNotFound /> },
     ],
   },
@@ -22,9 +41,10 @@ export function createAppRouter() {
 
 function PageNotFound() {
   return (
-    <div className="space-y-2">
-      <h1 className="text-xl font-semibold">Page not found</h1>
-      <Link to="/" className="text-blue-700 underline">
+    <div className="max-w-prose space-y-3">
+      <h1 className="text-3xl font-semibold tracking-tight">Page not found</h1>
+      <p className="text-slate">This address doesn’t match any page in the app.</p>
+      <Link to="/" className="link">
         Back to all properties
       </Link>
     </div>

@@ -29,17 +29,20 @@ export function CreatePropertyPage() {
   const described = error ? describeError(error) : undefined;
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Add a property</h1>
-      <p className="text-sm text-gray-600">
-        The current weather for the zip code is looked up and saved with the property.
+    <div className="mx-auto max-w-xl">
+      <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Add a property</h1>
+      <p className="mt-3 text-slate">
+        Enter a US address. The current weather for its zip code is looked up and saved with the
+        property.
       </p>
-      {described && <ErrorAlert error={described} />}
-      <PropertyForm
-        onSubmit={(input) => void handleSubmit(input)}
-        submitting={loading}
-        serverErrors={described?.fieldErrors}
-      />
+      <div className="panel mt-8 space-y-6 p-6 sm:p-8">
+        {described && <ErrorAlert error={described} />}
+        <PropertyForm
+          onSubmit={(input) => void handleSubmit(input)}
+          submitting={loading}
+          serverErrors={described?.fieldErrors}
+        />
+      </div>
     </div>
   );
 }

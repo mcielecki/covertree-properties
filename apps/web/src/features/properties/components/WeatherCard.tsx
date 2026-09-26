@@ -18,33 +18,33 @@ export function WeatherCard({ weather }: { weather: WeatherData }) {
     ['Wind', formatWind(weather.windSpeed, weather.windDir)],
     ['Humidity', formatHumidity(weather.humidity)],
   ];
+  const shown = details.filter((detail): detail is [string, string] => detail[1] !== null);
 
   return (
-    <section
-      aria-labelledby="weather-heading"
-      className="rounded border border-gray-200 bg-white p-4"
-    >
-      <h2 id="weather-heading" className="text-lg font-semibold">
+    <section aria-labelledby="weather-heading" className="panel p-6">
+      <h2 id="weather-heading" className="text-lg font-semibold tracking-tight">
         Weather at creation
       </h2>
-      <div className="mt-3 flex items-center gap-4">
-        {icon && <img src={icon} alt="" width={64} height={64} className="rounded" />}
+      <div className="mt-5 flex items-center gap-5">
+        {icon && <img src={icon} alt="" width={56} height={56} className="size-14 rounded-md" />}
         <div>
-          <p className="text-3xl font-semibold">{formatTemperature(weather.temperature)}</p>
-          {description && <p className="text-gray-700">{description}</p>}
+          <p className="text-5xl leading-none font-semibold tracking-tight tabular-nums">
+            {formatTemperature(weather.temperature)}
+          </p>
+          {description && <p className="mt-2 text-slate">{description}</p>}
         </div>
       </div>
-      <dl className="mt-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-        {details
-          .filter((detail): detail is [string, string] => detail[1] !== null)
-          .map(([label, value]) => (
-            <div key={label} className="contents">
-              <dt className="text-gray-600">{label}</dt>
-              <dd>{value}</dd>
+      {shown.length > 0 && (
+        <dl className="mt-6 grid grid-cols-3 gap-4 border-t border-mist pt-5">
+          {shown.map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-sm text-slate">{label}</dt>
+              <dd className="mt-1 font-semibold tabular-nums">{value}</dd>
             </div>
           ))}
-      </dl>
-      <p className="mt-3 text-xs text-gray-500">{formatObservationTime(weather.observationTime)}</p>
+        </dl>
+      )}
+      <p className="mt-5 text-sm text-slate">{formatObservationTime(weather.observationTime)}</p>
     </section>
   );
 }

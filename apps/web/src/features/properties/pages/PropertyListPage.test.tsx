@@ -25,7 +25,7 @@ const manyItems = (count: number) =>
 
 describe('PropertyListPage', () => {
   it('AC-W.1/W.7: shows a loading state, then the properties with their fields', async () => {
-    renderApp('/', [listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem()]))]);
+    await renderApp('/', [listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem()]))]);
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading properties…');
 
@@ -41,7 +41,7 @@ describe('PropertyListPage', () => {
   });
 
   it('AC-W.7: shows an error state with a retry', async () => {
-    renderApp('/', [
+    await renderApp('/', [
       {
         request: { query: PROPERTIES_QUERY, variables: DEFAULT_LIST_VARIABLES },
         error: new TypeError('Failed to fetch'),
@@ -54,7 +54,7 @@ describe('PropertyListPage', () => {
   });
 
   it('AC-W.7: shows an empty state when there are no properties', async () => {
-    renderApp('/', [listMock(DEFAULT_LIST_VARIABLES, propertyPage([]))]);
+    await renderApp('/', [listMock(DEFAULT_LIST_VARIABLES, propertyPage([]))]);
 
     expect(await screen.findByText('No properties yet.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Add the first property' })).toHaveAttribute(
@@ -64,7 +64,7 @@ describe('PropertyListPage', () => {
   });
 
   it('shows a different empty state when filters match nothing', async () => {
-    renderApp('/?state=CA', [
+    await renderApp('/?state=CA', [
       listMock({ ...DEFAULT_LIST_VARIABLES, filter: { state: 'CA' } }, propertyPage([])),
     ]);
 
@@ -72,7 +72,7 @@ describe('PropertyListPage', () => {
   });
 
   it('AC-W.2: restores filters, sort and page from the URL', async () => {
-    renderApp('/?city=Phoenix&state=AZ&zip=85001&sort=asc&page=2', [
+    await renderApp('/?city=Phoenix&state=AZ&zip=85001&sort=asc&page=2', [
       listMock(
         {
           filter: { city: 'Phoenix', state: 'AZ', zipCode: '85001' },
@@ -93,7 +93,7 @@ describe('PropertyListPage', () => {
 
   it('AC-W.2/W.3: applying a city filter updates the URL and the query, and resets the page', async () => {
     const user = userEvent.setup();
-    const { router } = renderApp('/?page=2', [
+    const { router } = await renderApp('/?page=2', [
       listMock({ ...DEFAULT_LIST_VARIABLES, offset: 20 }, propertyPage(manyItems(1), 21)),
       listMock(
         { ...DEFAULT_LIST_VARIABLES, filter: { city: 'fountain hills' } },
@@ -114,7 +114,7 @@ describe('PropertyListPage', () => {
 
   it('does not apply an invalid zip filter, and says why', async () => {
     const user = userEvent.setup();
-    const { router } = renderApp('/', [
+    const { router } = await renderApp('/', [
       listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem()])),
     ]);
     await screen.findByText('Page 1 of 1');
@@ -128,7 +128,7 @@ describe('PropertyListPage', () => {
 
   it('AC-W.2: choosing a state applies it immediately', async () => {
     const user = userEvent.setup();
-    const { router } = renderApp('/', [
+    const { router } = await renderApp('/', [
       listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem()])),
       listMock({ ...DEFAULT_LIST_VARIABLES, filter: { state: 'CA' } }, propertyPage([])),
     ]);
@@ -142,7 +142,7 @@ describe('PropertyListPage', () => {
 
   it('AC-W.2: the sort toggle switches to oldest first', async () => {
     const user = userEvent.setup();
-    const { router } = renderApp('/', [
+    const { router } = await renderApp('/', [
       listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem({ street: 'Newest' })])),
       listMock(
         { ...DEFAULT_LIST_VARIABLES, sortOrder: 'ASC' },
@@ -159,7 +159,7 @@ describe('PropertyListPage', () => {
 
   it('AC-W.3: pagination moves by one page of 20 and shows "Page X of Y"', async () => {
     const user = userEvent.setup();
-    const { router } = renderApp('/', [
+    const { router } = await renderApp('/', [
       listMock(DEFAULT_LIST_VARIABLES, propertyPage(manyItems(20), 45)),
       listMock({ ...DEFAULT_LIST_VARIABLES, offset: 20 }, propertyPage(manyItems(20), 45)),
     ]);
@@ -173,7 +173,7 @@ describe('PropertyListPage', () => {
   });
 
   it('goes to the last page when the requested page is past the end', async () => {
-    const { router } = renderApp('/?page=3', [
+    const { router } = await renderApp('/?page=3', [
       listMock({ ...DEFAULT_LIST_VARIABLES, offset: 40 }, propertyPage([], 21)),
       listMock({ ...DEFAULT_LIST_VARIABLES, offset: 20 }, propertyPage(manyItems(1), 21)),
     ]);
@@ -185,9 +185,8 @@ describe('PropertyListPage', () => {
   describe('delete (AC-W.6)', () => {
     it('does nothing when the confirmation is cancelled', async () => {
       const user = userEvent.setup();
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
       const deleteResult = vi.fn(() => ({ data: { deleteProperty: PROPERTY_ID } }));
-      renderApp('/', [
+      await renderApp('/', [
         listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem()])),
         {
           request: { query: DELETE_PROPERTY, variables: { id: PROPERTY_ID } },
@@ -199,17 +198,20 @@ describe('PropertyListPage', () => {
         await screen.findByRole('button', { name: /^Delete 15528 E Golden Eagle Blvd/ }),
       );
 
-      expect(confirm).toHaveBeenCalledWith(
-        'Delete 15528 E Golden Eagle Blvd, Fountain Hills, AZ 85268? This cannot be undone.',
+      const dialog = screen.getByRole('alertdialog', { name: 'Delete this property?' });
+      expect(dialog).toHaveAccessibleDescription(
+        '15528 E Golden Eagle Blvd, Fountain Hills, AZ 85268 will be permanently removed.',
       );
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       expect(deleteResult).not.toHaveBeenCalled();
       expect(screen.getByRole('link', { name: '15528 E Golden Eagle Blvd' })).toBeInTheDocument();
     });
 
     it('deletes after confirmation and refetches the list', async () => {
       const user = userEvent.setup();
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
-      renderApp('/', [
+      await renderApp('/', [
         listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem()])),
         {
           request: { query: DELETE_PROPERTY, variables: { id: PROPERTY_ID } },
@@ -219,6 +221,7 @@ describe('PropertyListPage', () => {
       ]);
 
       await user.click(await screen.findByRole('button', { name: /^Delete 15528/ }));
+      await user.click(screen.getByRole('button', { name: 'Delete property' }));
 
       // Only the refetch can produce the empty result.
       expect(await screen.findByText('No properties yet.')).toBeInTheDocument();
@@ -226,8 +229,7 @@ describe('PropertyListPage', () => {
 
     it('shows the error when the delete fails', async () => {
       const user = userEvent.setup();
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
-      renderApp('/', [
+      await renderApp('/', [
         listMock(DEFAULT_LIST_VARIABLES, propertyPage([listItem()])),
         {
           request: { query: DELETE_PROPERTY, variables: { id: PROPERTY_ID } },
@@ -239,6 +241,7 @@ describe('PropertyListPage', () => {
       ]);
 
       await user.click(await screen.findByRole('button', { name: /^Delete 15528/ }));
+      await user.click(screen.getByRole('button', { name: 'Delete property' }));
 
       expect(await screen.findByRole('alert')).toHaveTextContent('This property no longer exists.');
     });

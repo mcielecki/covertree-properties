@@ -32,7 +32,7 @@ Library APIs referenced here were checked with context7 on 2026-09-26
 | 17 | Base URL | `WEATHERSTACK_BASE_URL`, default `https://api.weatherstack.com` |
 | 18 | `weatherData` | Raw `current` stored as JSON; exposed as typed `WeatherData` GraphQL object; zod-validated on ingress (only 4 fields required, rest optional/nullable) |
 | 19 | Field names | `lat`, `long` (`Float!`) as in requirements; `createdAt: DateTime!` |
-| 20 | Web pages | `/`, `/properties/new`, `/properties/:id`; filters/sort/page in URL; delete with confirm |
+| 20 | Web pages | `/`, `/properties/new`, `/properties/:id` (lazy route chunks); filters/sort/page in URL; delete confirmed in a native modal `<dialog>` |
 | 21 | State input | `<select>` from generated `USState` enum; client-side zod mirrors API rules |
 | 22 | Test DBs | `covertree_test` (integration) and `covertree_e2e` (Playwright), both in the same Postgres container |
 | 23 | Adapter tests | Fixture-based, mocked `fetch`; no live calls in any test |
@@ -160,7 +160,8 @@ unless stated otherwise. In API tests the weather provider is a fake unless stat
   wind mph + direction, humidity %, observation time labelled as UTC, e.g. "Observed 12:14 PM UTC").
   Nullable weather fields that are `null` are hidden, never shown as "null" or 0. An unknown id shows a
   "Property not found" state.
-- **AC-W.6** Delete is available on the list and details pages. It asks for confirmation.
+- **AC-W.6** Delete is available on the list and details pages. It asks for confirmation in a modal
+  `<dialog>` opened with `showModal()` (page inert, Escape cancels, focus returns to the trigger).
   After `createProperty` or `deleteProperty` succeeds, the active `Properties` list query is refetched
   (`refetchQueries`), so the list is correct without a full reload. On the details page, a successful
   delete evicts the `Property` entity from the Apollo cache (`cache.evict` + `cache.gc`) and redirects to `/`.
@@ -620,6 +621,7 @@ covertree-properties/
 │   ├── REQUIREMENTS.md
 │   ├── SPEC.md
 │   ├── AI_WORKFLOW.md
+│   ├── screenshots/              # list, details, create (desktop), for the README
 │   └── ai-sessions/
 ├── packages/
 │   └── validation/               # shared zod schemas + US_STATES (used by api and web)
@@ -680,16 +682,19 @@ covertree-properties/
 │       ├── Dockerfile            # `pnpm --filter @covertree/web build` → apps/web/dist → nginx static
 │       ├── nginx.conf            # SPA fallback (try_files … /index.html), immutable /assets cache
 │       ├── index.html            # Vite entry
+│       ├── public/favicon.svg
 │       ├── codegen.ts            # client preset → src/gql/ (schema read from apps/api SDL files)
 │       ├── playwright.config.ts  # webServer: api (WEATHER_PROVIDER=fake, covertree_e2e DB) + web
 │       ├── e2e/property-smoke.spec.ts
 │       └── src/
-│           ├── main.tsx, App.tsx (layout), router.tsx (routes shared with tests)
+│           ├── main.tsx, App.tsx (layout), router.tsx (lazy routes, shared with tests)
+│           ├── index.css                       # Tailwind @theme tokens (canopy #00806A, …), Public Sans, component classes
 │           ├── apollo/client.ts               # ApolloClient + InMemoryCache (only WeatherData merge policy, §6)
 │           ├── gql/                            # generated TypedDocumentNodes, committed (`pnpm codegen`)
 │           ├── lib/error-messages.ts           # extensions.code → user-facing text
 │           ├── lib/format.ts                   # °F / mph / %, trimmed descriptions, "Observed … UTC", dates
 │           ├── components/Feedback.tsx         # LoadingState, ErrorAlert (ALREADY_EXISTS link)
+│           ├── components/ConfirmDialog.tsx    # native <dialog> + showModal()
 │           ├── features/properties/
 │           │   ├── api/{queries.ts, mutations.ts}      # graphql() documents
 │           │   ├── pages/{PropertyListPage, PropertyDetailsPage, CreatePropertyPage}.tsx
@@ -849,6 +854,12 @@ Every test maps back to an AC id where possible (`it('AC-5.7: rejects duplicate 
   `refetchQueries` for the list query, and a delete on the details page evicts the entity and
   redirects (W.6). The weather card formats °F, mph and %, labels the observation time as UTC, and
   hides null optional fields (W.5).
+- **Test harness.** `renderApp` is async: it resolves once the router has loaded the page's lazy
+  route module. jsdom has no `showModal`/`close`, so `test/setup.ts` stubs them to toggle `open`
+  and fire `close`. Dialog tests cover roles, labels and callbacks only. Modality (inert page,
+  Escape, focus return) is the browser's job and is checked manually or in Playwright.
+- **Form accessibility.** A failed submit moves focus to the first invalid field (its message is
+  its `aria-describedby`), and a polite `role="status"` region announces how many fields need fixing.
 
 ### 7.4 E2E (Playwright, one smoke flow)
 
@@ -935,6 +946,11 @@ Check library APIs with context7 before writing code against them.
    observation time and null fields hidden), the create form (shared zod schemas), delete
    (`refetchQueries`, plus evict and redirect on details), error-code messages, and RTL tests (§7.3).
    Split into several commits if needed (`feat(web): …`).
+   **7b. Visual polish.** Design tokens (canopy `#00806A`, Public Sans), responsive layout down to
+   375 px (the table renders as cards below `md` from one markup), accessibility (focus styles,
+   AA contrast, live regions), native `<dialog>` confirmation instead of `window.confirm`, and
+   lazy route chunks so the entry chunk stays under Vite's 500 kB warning.
+   Commit: `feat(web): polish visual design, accessibility and responsiveness`.
 8. **E2E.** Playwright config (api with `WEATHER_PROVIDER=fake` on `covertree_e2e`, plus web), a
    `globalSetup` that migrates and truncates, and the smoke flow (§7.4). `pnpm test:e2e` passes.
    Commit: `test(e2e): add property smoke flow`.

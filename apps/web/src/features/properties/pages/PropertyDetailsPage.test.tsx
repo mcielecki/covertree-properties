@@ -18,7 +18,7 @@ const detailsMock = (result: object) => ({
 
 describe('PropertyDetailsPage', () => {
   it('AC-W.5: shows every field and the weather card', async () => {
-    renderApp(`/properties/${PROPERTY_ID}`, [
+    await renderApp(`/properties/${PROPERTY_ID}`, [
       detailsMock({ data: { property: propertyDetails() } }),
     ]);
 
@@ -40,14 +40,14 @@ describe('PropertyDetailsPage', () => {
   });
 
   it('AC-W.5: an unknown id shows "Property not found"', async () => {
-    renderApp(`/properties/${PROPERTY_ID}`, [detailsMock({ data: { property: null } })]);
+    await renderApp(`/properties/${PROPERTY_ID}`, [detailsMock({ data: { property: null } })]);
 
     expect(await screen.findByRole('heading', { name: 'Property not found' })).toBeInTheDocument();
   });
 
-  it('a malformed id shows "Property not found" without asking the API', () => {
+  it('a malformed id shows "Property not found" without asking the API', async () => {
     const result = vi.fn(() => ({ data: { property: null } }));
-    renderApp('/properties/not-a-uuid', [
+    await renderApp('/properties/not-a-uuid', [
       { request: { query: PROPERTY_QUERY, variables: () => true }, result },
     ]);
 
@@ -56,7 +56,7 @@ describe('PropertyDetailsPage', () => {
   });
 
   it('AC-W.7: shows an error state', async () => {
-    renderApp(`/properties/${PROPERTY_ID}`, [
+    await renderApp(`/properties/${PROPERTY_ID}`, [
       {
         request: { query: PROPERTY_QUERY, variables: { id: PROPERTY_ID } },
         error: new TypeError('Failed to fetch'),
@@ -68,9 +68,8 @@ describe('PropertyDetailsPage', () => {
 
   it('AC-W.6: delete asks for confirmation, evicts the property from the cache and redirects to /', async () => {
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const detailsResult = vi.fn(() => ({ data: { property: propertyDetails() } }));
-    const { client, router } = renderApp(`/properties/${PROPERTY_ID}`, [
+    const { client, router } = await renderApp(`/properties/${PROPERTY_ID}`, [
       {
         request: { query: PROPERTY_QUERY, variables: { id: PROPERTY_ID } },
         result: detailsResult,
@@ -90,8 +89,13 @@ describe('PropertyDetailsPage', () => {
     expect(client.cache.extract()).toHaveProperty(`Property:${PROPERTY_ID}`);
 
     await user.click(screen.getByRole('button', { name: /^Delete 15528/ }));
+    await user.click(
+      within(screen.getByRole('alertdialog', { name: 'Delete this property?' })).getByRole(
+        'button',
+        { name: 'Delete property' },
+      ),
+    );
 
-    expect(confirm).toHaveBeenCalledOnce();
     expect(await screen.findByText('No properties yet.')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/');
     expect(client.cache.extract()).not.toHaveProperty(`Property:${PROPERTY_ID}`);

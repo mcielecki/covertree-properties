@@ -34,7 +34,11 @@ export function PropertyFilters({ value, onApply }: PropertyFiltersProps) {
       else nextErrors.zip = result.error.issues[0]?.message;
     }
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (nextErrors.city ?? nextErrors.zip) {
+      // Focus the first problem; its message is read as the input's description.
+      document.getElementById(nextErrors.city ? 'filter-city' : 'filter-zip')?.focus();
+      return;
+    }
     if (state) filters.state = state;
     onApply(filters);
   }
@@ -51,7 +55,7 @@ export function PropertyFilters({ value, onApply }: PropertyFiltersProps) {
       onSubmit={handleSubmit}
       noValidate
       aria-label="Filter properties"
-      className="flex flex-wrap items-start gap-3"
+      className="panel grid gap-4 p-4 sm:grid-cols-[1fr_10rem_9rem_auto] sm:items-start sm:p-5"
     >
       <TextFilter
         id="filter-city"
@@ -60,15 +64,15 @@ export function PropertyFilters({ value, onApply }: PropertyFiltersProps) {
         onChange={setCity}
         error={errors.city}
       />
-      <div className="flex flex-col gap-1">
-        <label htmlFor="filter-state" className="text-sm font-medium">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="filter-state" className="field-label">
           State
         </label>
         <select
           id="filter-state"
           value={value.state ?? ''}
           onChange={(event) => apply((event.target.value || undefined) as USState | undefined)}
-          className="rounded border border-gray-300 bg-white px-2 py-1.5"
+          className="field-control"
         >
           <option value="">All states</option>
           {US_STATES.map((state) => (
@@ -86,15 +90,15 @@ export function PropertyFilters({ value, onApply }: PropertyFiltersProps) {
         error={errors.zip}
         inputMode="numeric"
       />
-      <div className="flex gap-2 self-end">
-        <button type="submit" className="rounded bg-gray-800 px-3 py-1.5 text-sm text-white">
+      <div className="flex gap-2 sm:mt-[1.625rem]">
+        <button type="submit" className="btn btn-primary flex-1 sm:flex-none">
           Apply filters
         </button>
         {hasFilters && (
           <button
             type="button"
             onClick={() => onApply({})}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm"
+            className="btn btn-secondary flex-1 sm:flex-none"
           >
             Clear filters
           </button>
@@ -115,8 +119,8 @@ interface TextFilterProps {
 
 function TextFilter({ id, label, value, onChange, error, inputMode }: TextFilterProps) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="field-label">
         {label}
       </label>
       <input
@@ -126,10 +130,10 @@ function TextFilter({ id, label, value, onChange, error, inputMode }: TextFilter
         inputMode={inputMode}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
-        className="rounded border border-gray-300 px-2 py-1.5"
+        className={`field-control ${inputMode ? 'tabular-nums' : ''}`}
       />
       {error && (
-        <p id={`${id}-error`} className="text-xs text-red-700">
+        <p id={`${id}-error`} className="field-error">
           {error}
         </p>
       )}

@@ -30,13 +30,18 @@ export function PropertyListPage() {
   const hasFilters = Boolean(params.city || params.state || params.zip);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Properties</h1>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Properties</h1>
+          <p className="mt-2 text-slate tabular-nums" aria-live="polite">
+            {data && totalCount > 0 ? countLabel(totalCount, hasFilters) : '\u00a0'}
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => setSort(params.sort === 'desc' ? 'asc' : 'desc')}
-          className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm"
+          className="btn btn-secondary"
         >
           Sort: {params.sort === 'desc' ? 'Newest first' : 'Oldest first'}
         </button>
@@ -64,6 +69,13 @@ export function PropertyListPage() {
   );
 }
 
+function countLabel(count: number, filtered: boolean) {
+  if (!filtered) return count === 1 ? '1 property' : `${count} properties`;
+  return count === 1
+    ? '1 property matches these filters'
+    : `${count} properties match these filters`;
+}
+
 function EmptyState({
   filtered,
   onClearFilters,
@@ -72,18 +84,23 @@ function EmptyState({
   onClearFilters: () => void;
 }) {
   return (
-    <div className="rounded border border-dashed border-gray-300 bg-white p-6 text-center">
+    <div className="panel flex flex-col items-start gap-4 border-dashed px-6 py-12 sm:items-center sm:text-center">
       {filtered ? (
         <>
-          <p>No properties match these filters.</p>
-          <button type="button" onClick={onClearFilters} className="mt-2 text-blue-700 underline">
+          <p className="text-lg font-semibold">No properties match these filters.</p>
+          <button type="button" onClick={onClearFilters} className="btn btn-secondary">
             Clear filters
           </button>
         </>
       ) : (
         <>
-          <p>No properties yet.</p>
-          <Link to="/properties/new" className="mt-2 inline-block text-blue-700 underline">
+          <div>
+            <p className="text-lg font-semibold">No properties yet.</p>
+            <p className="mt-1 text-slate">
+              Add an address and its current weather is recorded with it.
+            </p>
+          </div>
+          <Link to="/properties/new" className="btn btn-primary">
             Add the first property
           </Link>
         </>

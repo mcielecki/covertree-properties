@@ -1,1 +1,169 @@
+@import '@fontsource-variable/public-sans';
 @import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Public Sans Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Accent: 4.9:1 on white, AA for body text. */
+  --color-canopy: #00806a;
+  --color-canopy-deep: #00604f;
+  --color-canopy-wash: #e6f3f0;
+  /* Text */
+  --color-pine: #16302b;
+  --color-slate: #52625d;
+  /* Surfaces and lines */
+  --color-mist: #dce4e1;
+  --color-paper: #f6f8f7;
+  /* Errors and destructive actions: 6.5:1 on white. */
+  --color-alert: #b42318;
+  --color-alert-deep: #8f1c13;
+  --color-alert-wash: #fdf1ef;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-paper font-sans text-pine antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-canopy);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  #main:focus {
+    outline: none;
+  }
+
+  a {
+    @apply rounded-sm;
+  }
+
+  ::selection {
+    @apply bg-canopy-wash;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-canopy text-white hover:bg-canopy-deep;
+  }
+  .btn-secondary {
+    @apply border border-mist bg-white text-pine hover:border-slate/40 hover:bg-paper;
+  }
+  .btn-danger {
+    @apply bg-alert text-white hover:bg-alert-deep;
+  }
+  .btn-danger-quiet {
+    @apply min-h-10 px-3 text-alert hover:bg-alert-wash;
+  }
+
+  .link {
+    @apply font-medium text-canopy underline decoration-canopy/30 underline-offset-4 hover:decoration-canopy;
+  }
+
+  .field-label {
+    @apply text-sm font-semibold text-pine;
+  }
+  .field-control {
+    @apply min-h-11 w-full rounded-md border border-mist bg-white px-3 text-base text-pine transition-colors placeholder:text-slate hover:border-slate/40 focus-visible:border-canopy aria-invalid:border-alert;
+  }
+  .field-error {
+    @apply text-sm text-alert;
+  }
+
+  .panel {
+    @apply rounded-lg border border-mist bg-white;
+  }
+
+  /* Property list: a table from md up, one card per row below it. */
+  .property-table th {
+    @apply border-b border-mist bg-paper px-4 py-3 text-sm font-semibold text-slate;
+  }
+  .property-table td {
+    @apply px-4 py-4 align-middle;
+  }
+  .property-table tbody tr {
+    @apply border-b border-mist last:border-0;
+  }
+  .property-table td[data-cell='street'] {
+    @apply font-medium;
+  }
+  .property-table td[data-cell='created'],
+  .property-table td[data-cell='state'],
+  .property-table td[data-cell='zip'] {
+    @apply text-slate;
+  }
+
+  @media (width < 48rem) {
+    .property-table thead {
+      @apply sr-only;
+    }
+    .property-table tbody {
+      @apply block;
+    }
+    .property-table tbody tr {
+      @apply flex flex-wrap items-center gap-x-1.5 px-4 py-5;
+    }
+    /* A zero-height item that forces the stats onto their own line. */
+    .property-table tbody tr::before {
+      content: '';
+      @apply order-5 h-0 basis-full;
+    }
+    .property-table td {
+      @apply block p-0;
+    }
+    .property-table td[data-cell='street'] {
+      @apply order-1 mb-1 basis-full text-lg leading-snug;
+    }
+    .property-table td[data-cell='city'] {
+      @apply order-2 text-slate after:content-[','];
+    }
+    .property-table td[data-cell='state'] {
+      @apply order-3;
+    }
+    .property-table td[data-cell='zip'] {
+      @apply order-4;
+    }
+    .property-table td[data-cell='temperature'] {
+      @apply order-6 mt-3 mr-4 text-left font-semibold;
+    }
+    .property-table td[data-cell='created'] {
+      @apply order-7 mt-3 text-sm before:content-['Added_'];
+    }
+    .property-table td[data-cell='actions'] {
+      @apply order-8 mt-3 ml-auto;
+    }
+  }
+
+  /* <dialog> backdrop and the one piece of motion that answers an action. */
+  .confirm-dialog::backdrop {
+    background: rgb(22 48 43 / 0.45);
+  }
+  .confirm-dialog[open] {
+    animation: dialog-in 160ms ease-out;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
