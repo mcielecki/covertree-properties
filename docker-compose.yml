@@ -1,4 +1,5 @@
-# Dev mode: `docker compose up -d db`. The api and web services are added in the Docker milestone.
+# One command: `docker compose up --build` (db + api + web). Values come from the repo-root .env.
+# Dev mode: `docker compose up -d db`, then run the apps with `pnpm dev`.
 services:
   db:
     image: postgres:17-alpine
@@ -17,6 +18,51 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    # Explicit list rather than env_file: .env's DATABASE_URL points at localhost, not the db service.
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-covertree}:${POSTGRES_PASSWORD:-covertree}@db:5432/${POSTGRES_DB:-covertree}
+      WEATHER_PROVIDER: ${WEATHER_PROVIDER:-weatherstack}
+      WEATHERSTACK_API_KEY: ${WEATHERSTACK_API_KEY:-}
+      WEATHERSTACK_BASE_URL: ${WEATHERSTACK_BASE_URL:-https://api.weatherstack.com}
+      WEATHERSTACK_TIMEOUT_MS: ${WEATHERSTACK_TIMEOUT_MS:-5000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      PORT: 4000
+      NODE_ENV: production
+    ports:
+      - '4000:4000'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # Yoga's built-in liveness endpoint. The slim image has no curl/wget, so use Node's fetch.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # Covers `prisma migrate deploy` before the server listens.
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Build-time: the browser calls the api through the host port.
+        VITE_GRAPHQL_URL: ${VITE_GRAPHQL_URL:-http://localhost:4000/graphql}
+    ports:
+      - '5173:80'
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   db-data:

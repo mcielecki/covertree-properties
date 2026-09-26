@@ -1,0 +1,13 @@
+# Build context is the repo root (both Dockerfiles need the workspace). Keep it small and secret-free.
+**/node_modules
+**/dist
+**/coverage
+apps/api/src/generated
+.env
+.env.*
+!.env.example
+.git
+.claude
+docs
+**/*.log
+.DS_Store

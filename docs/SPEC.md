@@ -606,6 +606,7 @@ covertree-properties/
 ├── CLAUDE.md
 ├── README.md                     # setup, both run modes, env vars, Weatherstack HTTPS note
 ├── docker-compose.yml            # services: db (healthcheck), api, web  (dev: `docker compose up -d db`)
+├── .dockerignore                 # build context is the repo root; excludes node_modules, dist, .env, .git
 ├── .env.example                  # all env vars, no secrets
 ├── package.json                  # root scripts: dev, build, typecheck, lint, test, test:e2e, codegen, format, format:check
 ├── .nvmrc                        # Node 22
@@ -625,7 +626,7 @@ covertree-properties/
 │       └── src/{index.ts, property.schema.ts, us-states.ts, normalize.ts}
 ├── apps/
 │   ├── api/
-│   │   ├── Dockerfile
+│   │   ├── Dockerfile            # pnpm install --frozen-lockfile; CMD: prisma migrate deploy && tsx src/main.ts
 │   │   ├── codegen.ts            # server preset (@eddeee888/gcg-typescript-resolver-files); `pnpm codegen`
 │   │   ├── prisma.config.ts
 │   │   ├── prisma/{schema.prisma, migrations/}
@@ -676,7 +677,9 @@ covertree-properties/
 │   │       ├── integration/*.test.ts            # yoga.fetch + real Postgres
 │   │       └── helpers/{graphql.ts, db.ts, test-database.ts}  # test-database: TEST_DATABASE_URL + guard
 │   └── web/
-│       ├── Dockerfile            # vite build → nginx static
+│       ├── Dockerfile            # `pnpm --filter @covertree/web build` → apps/web/dist → nginx static
+│       ├── nginx.conf            # SPA fallback (try_files … /index.html), immutable /assets cache
+│       ├── index.html            # Vite entry
 │       ├── codegen.ts            # client preset → src/gql/ (schema read from apps/api SDL files)
 │       ├── playwright.config.ts  # webServer: api (WEATHER_PROVIDER=fake, covertree_e2e DB) + web
 │       ├── e2e/property-smoke.spec.ts
@@ -754,6 +757,31 @@ custom `typePolicies` or manual list merging.
   `docker compose up --build`. This starts db, api (runs migrations first) and web (nginx on :5173).
   `db` has a healthcheck (`pg_isready -U $POSTGRES_USER -d $POSTGRES_DB`), and `api` declares
   `depends_on: { db: { condition: service_healthy } }`, so migrations never race Postgres startup.
+- **Docker details.** Both images build with the repo root as context, since they need the pnpm
+  workspace, and install with `--frozen-lockfile` filtered to the app and its workspace deps.
+  - **`api`:** listens on `4000:4000`. Compose sets `DATABASE_URL` itself (host `db`, built from
+    `POSTGRES_*`) and passes the other api variables from the root `.env` by interpolation, not
+    `env_file`, because `.env`'s `DATABASE_URL` points at `localhost`. Its healthcheck probes Yoga's
+    built-in liveness endpoint `GET /health` with Node's `fetch`, since the slim image has no curl
+    or wget, and uses a `start_period` that covers the migrations. `app.test.ts` pins `/health`
+    at 200. There is no separate readiness endpoint: `depends_on: db: service_healthy` plus
+    `migrate deploy` before `listen` already guarantee the database is reachable when the server
+    starts.
+  - **`web`:** served by nginx on `5173:80`, so the default `CORS_ORIGIN` works unchanged. It
+    depends on `api: service_healthy`. `VITE_GRAPHQL_URL` is a build arg, because Vite inlines it.
+  - **Contract with the web app:** `pnpm --filter @covertree/web build` writes static files to
+    `apps/web/dist`. Until step 7 that is a placeholder `index.html`.
+  - **Missing key:** with no `WEATHERSTACK_API_KEY` and `WEATHER_PROVIDER` not `fake`, the api
+    exits at startup with `WEATHERSTACK_API_KEY: required unless WEATHER_PROVIDER=fake`, and
+    compose reports that `web`'s dependency failed. `WEATHER_PROVIDER=fake docker compose up --build`
+    runs without a key.
+- **Trade-off: the api container runs TypeScript with `tsx`, not compiled JS.** The source can't run
+  on plain Node as it is. `@covertree/validation` exports `.ts`, the Prisma 7 client is generated
+  as `.ts`, and imports use `.js` specifiers. A real build step would need a bundler, or a compile
+  step for every workspace package plus the generated client. The image also needs the Prisma CLI
+  (a devDependency) for `migrate deploy`, so it ships dev dependencies either way. The cost is a
+  larger image and a small startup transpile, which is acceptable for a one-command local run. Next
+  step: §10.
 - **Dev:** `docker compose up -d db`, then `pnpm install`, `pnpm --filter api prisma migrate dev`, `pnpm dev`
   (api with `tsx watch`, web with Vite). The api reads the repo-root `.env`; variables already set in
   the environment take precedence.
@@ -895,5 +923,16 @@ Check library APIs with context7 before writing code against them.
    `globalSetup` that migrates and truncates, and the smoke flow (§7.4). `pnpm test:e2e` passes.
    Commit: `test(e2e): add property smoke flow`.
 9. **README and docs.** README (both run modes, env vars, the Weatherstack HTTPS/`WEATHERSTACK_BASE_URL`
-   note, how coordinates are resolved, the live API check before delivery, scripts), `AI_WORKFLOW.md`
+   note, how coordinates are resolved, the live API check before delivery, scripts, and a "Next steps"
+   section taken from §10), `AI_WORKFLOW.md`
    session log and corrections, and a final pass that this spec matches the code. Commit: `docs: add README and finalize AI workflow`.
+
+---
+
+## 10. Next steps (for the README)
+
+Known improvements that are deliberately left out of this delivery. The README's "Next steps"
+section lists them.
+
+- Compile the API with esbuild and run migrations in a separate step for a smaller production image
+  (see the `tsx` trade-off in §6, Run modes).

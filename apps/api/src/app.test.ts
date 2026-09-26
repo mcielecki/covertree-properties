@@ -76,6 +76,15 @@ describe('createApp', () => {
     expect(logError).not.toHaveBeenCalled();
   });
 
+  // docker-compose.yml probes this endpoint as the api healthcheck.
+  it('answers the liveness check on /health', async () => {
+    const { app } = setup();
+
+    const response = await app.fetch('http://localhost/health');
+
+    expect(response.status).toBe(200);
+  });
+
   it('allows the configured CORS origin', async () => {
     const { app } = setup();
 
