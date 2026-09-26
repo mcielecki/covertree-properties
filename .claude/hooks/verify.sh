@@ -6,7 +6,7 @@ input=$(cat)
 cd "$CLAUDE_PROJECT_DIR" || exit 0
 # inactive until the monorepo scaffold defines the scripts
 jq -e '.scripts.typecheck and .scripts.lint' package.json >/dev/null 2>&1 || exit 0
-if ! out=$(pnpm -s typecheck 2>&1 && pnpm -s lint 2>&1); then
+if ! out=$(pnpm --reporter=silent typecheck 2>&1 && pnpm --reporter=silent lint 2>&1); then
   echo "Typecheck/lint failed. Fix these before finishing:" >&2
   echo "$out" | tail -n 60 >&2
   exit 2

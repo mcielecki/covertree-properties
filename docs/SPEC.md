@@ -563,7 +563,9 @@ covertree-properties/
 ├── README.md                     # setup, both run modes, env vars, Weatherstack HTTPS note
 ├── docker-compose.yml            # services: db (healthcheck), api, web  (dev: `docker compose up -d db`)
 ├── .env.example                  # all env vars, no secrets
-├── package.json                  # root scripts: dev, build, typecheck, lint, test, test:e2e, codegen
+├── package.json                  # root scripts: dev, build, typecheck, lint, test, test:e2e, codegen, format, format:check
+├── .nvmrc                        # Node 22
+├── .prettierrc.json, .prettierignore  # docs/, CLAUDE.md, .claude/ excluded (hand-formatted prose)
 ├── pnpm-workspace.yaml           # apps/*, packages/*
 ├── tsconfig.base.json
 ├── eslint.config.js              # flat config, typescript-eslint, shared by all packages
@@ -683,6 +685,7 @@ custom `typePolicies` or manual list merging.
 | `PORT` | api | `4000` | |
 | `CORS_ORIGIN` | api | `http://localhost:5173` | |
 | `VITE_GRAPHQL_URL` | web | `http://localhost:4000/graphql` | build-time |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | compose (db) | `covertree` / `covertree` / `covertree` | dev database; init script adds `covertree_test`, `covertree_e2e` |
 
 **Run modes**
 - **Reviewer (one command):** `cp .env.example .env`, put a key in `WEATHERSTACK_API_KEY`, then run
@@ -787,7 +790,8 @@ Check library APIs with context7 before writing code against them.
 
 1. **Monorepo scaffold and tooling.** pnpm workspace (`apps/api`, `apps/web`, `packages/validation`),
    `tsconfig.base.json`, a flat ESLint config, Vitest in each package, root scripts (`dev`, `build`,
-   `typecheck`, `lint`, `test`, `test:e2e`, `codegen`), `.env.example`, and a `docker-compose.yml`
+   `typecheck`, `lint`, `test`, `test:e2e`, `codegen`, `format`), `.nvmrc` (Node 22), Prettier config,
+   `.env.example`, and a `docker-compose.yml`
    with only `db` (healthcheck) plus `docker/postgres-init.sql` (`covertree_test`, `covertree_e2e`).
    One placeholder test per package proves the pipeline works.
    Commit: `chore: scaffold pnpm monorepo and tooling`.
