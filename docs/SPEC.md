@@ -808,7 +808,7 @@ manual list merging and a single type policy.
   (a devDependency) for `migrate deploy`, so it ships dev dependencies either way. The cost is a
   larger image and a small startup transpile, which is acceptable for a one-command local run. Next
   step: §10.
-- **Dev:** `docker compose up -d db`, then `pnpm install`, `pnpm --filter api prisma migrate dev`, `pnpm dev`
+- **Dev:** `docker compose up -d db`, then `pnpm install`, `pnpm --filter api exec prisma migrate dev`, `pnpm dev`
   (api with `tsx watch`, web with Vite). The api reads the repo-root `.env`; variables already set in
   the environment take precedence.
 

@@ -106,8 +106,8 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 | 06 | [Docker](ai-sessions/06-docker.md) | one-command start | verified on a clean clone |
 | 07a | [web functionality](ai-sessions/07a-web-functionality.md) | pages, data, tests | Apollo cache issues found in browser |
 | 07b | [web design](ai-sessions/07b-web-design.md) | design, a11y, responsive | Playwright walkthrough at 1280/375px |
-| 08 | <!-- e2e --> | | |
-| 09 | <!-- readme/docs --> | | |
+| 08 | [e2e](ai-sessions/08-e2e.md) | Playwright smoke flow | own ports + `_e2e` DB; 3/3 with `--repeat-each` |
+| 09 | [README & docs](ai-sessions/09-readme-docs.md) | README, final spec pass | example responses from a real run; spec dev command fixed |
 
 ## Where the AI was wrong (and how it was caught)
 
@@ -132,7 +132,12 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 7. **Over-broad `pkill`** (M7b). While stopping its own dev servers the agent killed one
    of my processes. It asked for permission and I approved too quickly. Fixed in the harness:
    `pkill`/`killall` are now denied, and I read out-of-list approvals carefully.
-<!-- add M8/M9 and final review findings -->
+8. **Wrong role in the E2E test** (M8). The test looked for a `dialog`, but `ConfirmDialog`
+   sets `alertdialog`. The failing run caught it; the test was fixed, the app was correct.
+9. **An unexplained hang on the first E2E run** (M8). The very first run hung before the web
+   server started. It could not be reproduced, so the cause is unknown (possibly the Chromium
+   download chained before it). Recorded as unresolved rather than explained away.
+<!-- add M9 and final review findings -->
 
 ## Where AI and tools caught problems
 
@@ -147,6 +152,10 @@ it wrote. Checks every AC against tests, layering rules, secrets and code smells
 - **Browser runs found Apollo cache bugs tests missed:** WeatherData (no id) was overwritten
   by the list's smaller selection (`merge: true`), and the details page refetched a deleted
   entity (`broadcast: false`).
+- **Leftover processes** (M8). Starting the E2E servers through `pnpm exec` left them running
+  after Playwright finished. `reuseExistingServer: false` refused the orphaned api on the next
+  run instead of silently reusing it. Fixed by starting the binaries directly and stopping them
+  with `SIGTERM`.
 - **Deliberate breakage to prove tests work:** in several milestones the agent removed a
   check (e.g. the US country check, refetchQueries) and confirmed the matching test failed.
 - **Real API quirks, confirmed on live data:** `lat`/`lon` are strings, errors come as
